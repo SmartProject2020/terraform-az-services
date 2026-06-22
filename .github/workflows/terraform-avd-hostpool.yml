@@ -136,13 +136,6 @@ on:
         type: choice
         options: ["true", "false"]
 
-      validate_environment:
-        description: "Pool de validation"
-        required: false
-        default: "false"
-        type: choice
-        options: ["true", "false"]
-
       custom_rdp_properties:
         description: "Proprietes RDP personnalisees (ex: RDP ShortPath - section 3.8 du TAD)"
         required: false
@@ -319,7 +312,7 @@ jobs:
           personal_desktop_assignment_type = $(to_str_or_null "${{ inputs.personal_desktop_assignment_type }}")
           maximum_sessions_allowed         = $(to_num_or_null "${{ inputs.maximum_sessions_allowed }}")
           start_vm_on_connect              = ${{ inputs.start_vm_on_connect }}
-          validate_environment             = ${{ inputs.validate_environment }}
+          validate_environment             = false
           custom_rdp_properties            = $(to_str_or_null "${{ inputs.custom_rdp_properties }}")
           registration_expiration_hours    = ${{ inputs.registration_expiration_hours }}
           scaling_plan_time_zone           = "${{ inputs.scaling_plan_time_zone }}"
