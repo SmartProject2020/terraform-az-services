@@ -1,0 +1,28 @@
+{
+  "routes": [
+    {
+      "route": "/.well-known/mta-sts.txt",
+      "headers": {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "max-age=3600, public",
+        "X-Content-Type-Options": "nosniff"
+      }
+    }
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/.well-known/*",
+      "/*.{css,js,png,jpg,svg,ico}"
+    ]
+  },
+  "mimeTypes": {
+    ".txt": "text/plain"
+  },
+  "responseOverrides": {
+    "404": {
+      "rewrite": "/index.html",
+      "statusCode": 404
+    }
+  }
+}

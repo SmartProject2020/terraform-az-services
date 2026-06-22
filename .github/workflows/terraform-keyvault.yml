@@ -1,0 +1,528 @@
+# ==============================================================================
+# GitHub Actions - Terraform Key Vault
+# Auth : OIDC - zero secret
+# PE : resolution automatique de l'increment
+#
+# Logique PE :
+#   - Si KV existe dans Azure -> importer KV + PE attache au KV -> pas de creation
+#   - Si KV n existe pas -> trouver premier PE inexistant dans Azure -> creer KV + PE
+# ==============================================================================
+
+name: Terraform - Key Vault
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Operation Terraform"
+        required: true
+        type: choice
+        options: [plan, apply, destroy]
+      subscription_id:
+        description: "Azure Subscription ID"
+        required: true
+        type: string
+      plaque:
+        description: "Plaque"
+        required: true
+        type: choice
+        options: [EM50, AM50, AP50, GL50]
+      application_id:
+        description: "Application ID"
+        required: true
+        type: string
+      setting:
+        description: "Setting"
+        required: true
+        type: choice
+        options: [NPR, PRD]
+      env:
+        description: "Environnement applicatif"
+        required: true
+        type: choice
+        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
+      servier_environment:
+        description: "Servier Environment"
+        required: true
+        type: choice
+        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
+      resource_group_inc:
+        description: "Increment Resource Group"
+        required: true
+        default: "01"
+        type: string
+      zoning:
+        description: "Zoning reseau"
+        required: true
+        type: choice
+        options: [prod-critical, prod-standard, prod-internet, nonprod-critical, nonprod-standard, nonprod-internet]
+      keyvault_inc:
+        description: "Increment Key Vault"
+        required: true
+        default: "01"
+        type: string
+      dns_zone_subscription_id:
+        description: "Subscription ID hebergeant la Private DNS Zone (defaut: GL50-HUBCENTRAL)"
+        required: false
+        default: "a96e6018-b2ce-46e9-a92b-50bf64b1e6cb"
+        type: string
+      location:
+        description: "Azure Region"
+        required: true
+        default: "France Central"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    name: "Terraform ${{ inputs.operation }} - ${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }}"
+    runs-on: [Automation_linux_pool]
+    env:
+      TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-keyvault-${{ inputs.keyvault_inc }}"
+      TF_VARFILE:   "vars/${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-${{ inputs.keyvault_inc }}.tfvars"
+      TF_PLANFILE:  "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-${{ inputs.keyvault_inc }}.tfplan"
+      TF_VAR_PLAQUE:                      "${{ inputs.plaque }}"
+      TF_VAR_ENV:                         "${{ inputs.env }}"
+      TF_VAR_SETTING:                     "${{ inputs.setting }}"
+      TF_VAR_APPLICATION_ID:              "${{ inputs.application_id }}"
+      TF_VAR_RESOURCE_GROUP_INC:          "${{ inputs.resource_group_inc }}"
+      TF_VAR_KEYVAULT_INC:                "${{ inputs.keyvault_inc }}"
+      TF_VAR_PRIV_ENDPOINT_RESOURCE_TYPE: "vault"
+      TF_VAR_HUB_SUBSCRIPTION_ID:         "${{ inputs.dns_zone_subscription_id }}"
+      # TF_VAR_PE_INC -> injecte via GITHUB_ENV a l'etape 8b
+
+    steps:
+      # ========================================================================
+      # ETAPE 0 : Garde-fous
+      # ========================================================================
+      - name: "Blocage - Destroy interdit en PRD"
+        if: inputs.setting == 'PRD' && inputs.operation == 'destroy'
+        run: |
+          echo "::error::DESTROY interdit en PRD"
+          exit 1
+
+      - name: "Clean git config"
+        run: |
+          git config --global --unset-all http.https://github.com/.extraheader || true
+
+      # ========================================================================
+      # ETAPE 1 : Token + Checkout
+      # ========================================================================
+      - name: "1. Token GitHub App"
+        id: app-token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+
+      - name: "2. Checkout terraform-az-services"
+        uses: actions/checkout@v4
+        with:
+          repository: servier-github/terraform-az-services
+          ref: poc
+          token: ${{ steps.app-token.outputs.token }}
+          path: terraform-az-services
+          persist-credentials: false
+      # ========================================================================
+      # ETAPE 3 : Routing OIDC + backend
+      # ========================================================================
+      - name: "3. Resolution secret Client ID + backend"
+        id: routing
+        run: |
+          set -euo pipefail
+
+          SETTING="${{ inputs.setting }}"
+          PLAQUE="${{ inputs.plaque }}"
+          ENV="${{ inputs.env }}"
+          SUBSCRIPTION_ID="${{ inputs.subscription_id }}"
+
+          MG_GL_SUBS=(
+            "a96e6018-b2ce-46e9-a92b-50bf64b1e6cb"
+            "fc23aeec-0740-4b1e-a80b-510195d94869"
+            "3bc8f7fd-5621-4832-9147-01ed59c7fe2e"
+            "7553fb7b-0db0-49e5-8227-d87872c206fd"
+          )
+
+          IS_MG_GL="false"
+          for sub in "${MG_GL_SUBS[@]}"; do
+            if [ "$SUBSCRIPTION_ID" = "$sub" ]; then
+              IS_MG_GL="true"
+              break
+            fi
+          done
+
+          if [ "$IS_MG_GL" = "true" ]; then
+            SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_MG_GL_PRD"
+            BACKEND_FILE="backends/${PLAQUE}-HUB.tfbackend"
+          else
+            SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_${SETTING}"
+            BACKEND_FILE="backends/${PLAQUE}-${ENV}.tfbackend"
+          fi
+
+          echo "secret=$SECRET_NAME"   >> "$GITHUB_OUTPUT"
+          echo "backend=$BACKEND_FILE" >> "$GITHUB_OUTPUT"
+          echo "Secret name  : $SECRET_NAME"
+          echo "Backend file : $BACKEND_FILE"
+
+      # ========================================================================
+      # ETAPE 4 : Azure Login + Terraform install
+      # ========================================================================
+      - name: "4. Azure Login (OIDC)"
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets[steps.routing.outputs.secret] }}
+          tenant-id:       ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ inputs.subscription_id }}
+
+      - name: "5. Install Terraform 1.7.5"
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      # ========================================================================
+      # ETAPE 6 : Generation tfvars + resolution zoning
+      # ========================================================================
+      - name: "6. Generation tfvars"
+        working-directory: terraform-az-services/Automation_Services_Keyvault
+        run: |
+          set -euo pipefail
+          mkdir -p vars
+
+          SUB_NAME=$(az account show --subscription "${{ inputs.subscription_id }}" --query "name" -o tsv)
+          SERVIER_ENV="${{ inputs.servier_environment }}"
+          if [ "${{ inputs.setting }}" = "PRD" ]; then
+            SERVIER_ENV="PRD"
+          fi
+
+          cat > "${{ env.TF_VARFILE }}" << EOF
+          location            = "${{ inputs.location }}"
+          servier_environment = "${SERVIER_ENV}"
+          EOF
+
+          Z="${{ inputs.zoning }}"
+          case "$SUB_NAME" in
+            *"EM50-PRD-MUT"*)
+              case "$Z" in
+                prod-critical)    S="EM50-PRD-MUT-VN02-SN001"; V="EM50-PRD-MUT-VN02"; R="EM50-PRD-MUT-RG002" ;;
+                prod-standard)    S="EM50-PRD-MUT-VN01-SN001"; V="EM50-PRD-MUT-VN01"; R="EM50-PRD-MUT-RG001" ;;
+                prod-internet)    S="EM50-PRD-MUT-VN03-SN001"; V="EM50-PRD-MUT-VN03"; R="EM50-PRD-MUT-RG003" ;;
+                *) echo "::error::Zoning invalide"; exit 1 ;;
+              esac ;;
+            *"AM50-PRD-MUT"*)
+              case "$Z" in
+                prod-critical)    S="AM50-PRD-MUT-VN02-SN001"; V="AM50-PRD-MUT-VN02"; R="AM50-PRD-MUT-RG002" ;;
+                prod-standard)    S="AM50-PRD-MUT-VN01-SN004"; V="AM50-PRD-MUT-VN01"; R="AM50-PRD-MUT-RG001" ;;
+                prod-internet)    S="AM50-PRD-MUT-VN03-SN001"; V="AM50-PRD-MUT-VN03"; R="AM50-PRD-MUT-RG003" ;;
+                *) echo "::error::Zoning invalide"; exit 1 ;;
+              esac ;;
+            *"AP50-PRD-MUT"*)
+              case "$Z" in
+                prod-critical)    S="AP50-PRD-MUT-VN02-SN001"; V="AP50-PRD-MUT-VN02"; R="AP50-PRD-MUT-RG002" ;;
+                prod-standard)    S="AP50-PRD-MUT-VN01-SN001"; V="AP50-PRD-MUT-VN01"; R="AP50-PRD-MUT-RG001" ;;
+                prod-internet)    S="AP50-PRD-MUT-VN03-SN001"; V="AP50-PRD-MUT-VN03"; R="AP50-PRD-MUT-RG003" ;;
+                *) echo "::error::Zoning invalide"; exit 1 ;;
+              esac ;;
+            *"EM50-NPR-MUT"*)
+              case "$Z" in
+                nonprod-critical) S="EM50-DEV-MUT-VN02-SN001"; V="EM50-DEV-MUT-VN02"; R="EM50-DEV-MUT-RG002" ;;
+                nonprod-standard) S="EM50-DEV-MUT-VN01-SN001"; V="EM50-DEV-MUT-VN01"; R="EM50-DEV-MUT-RG001" ;;
+                nonprod-internet) S="EM50-DEV-MUT-VN03-SN001"; V="EM50-DEV-MUT-VN03"; R="EM50-DEV-MUT-RG003" ;;
+                *) echo "::error::Zoning invalide"; exit 1 ;;
+              esac ;;
+            *"AM50-NPR-MUT"*|*"AM50-DEV-MUT"*)
+              case "$Z" in
+                nonprod-critical) S="AM50-DEV-MUT-VN02-SN001"; V="AM50-DEV-MUT-VN02"; R="AM50-DEV-MUT-RG002" ;;
+                nonprod-standard) S="AM50-DEV-MUT-VN01-SN001"; V="AM50-DEV-MUT-VN01"; R="AM50-DEV-MUT-RG001" ;;
+                nonprod-internet) S="AM50-DEV-MUT-VN03-SN001"; V="AM50-DEV-MUT-VN03"; R="AM50-DEV-MUT-RG003" ;;
+                *) echo "::error::Zoning invalide"; exit 1 ;;
+              esac ;;
+            *"AP50-NPR-MUT"*|*"AP50-DEV-MUT"*)
+              case "$Z" in
+                nonprod-critical) S="AP50-DEV-MUT-VN02-SN001"; V="AP50-DEV-MUT-VN02"; R="AP50-DEV-MUT-RG002" ;;
+                nonprod-standard) S="AP50-DEV-MUT-VN01-SN001"; V="AP50-DEV-MUT-VN01"; R="AP50-DEV-MUT-RG001" ;;
+                nonprod-internet) S="AP50-DEV-MUT-VN03-SN001"; V="AP50-DEV-MUT-VN03"; R="AP50-DEV-MUT-RG003" ;;
+                *) echo "::error::Zoning invalide"; exit 1 ;;
+              esac ;;
+            *) echo "::error::Subscription non reconnue: $SUB_NAME"; exit 1 ;;
+          esac
+
+          cat >> "${{ env.TF_VARFILE }}" << EOF
+          subnet_name             = "${S}"
+          vnet_name               = "${V}"
+          virtual_network_rg_name = "${R}"
+          EOF
+          echo "Subnet: $S | VNet: $V | RG reseau: $R"
+
+      # ========================================================================
+      # ETAPE 6b : Break state lock orphelin avant init
+      # ========================================================================
+      - name: "6b. Break state lock si existant"
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          BACKEND_FILE="terraform-az-services/Automation_Services_Keyvault/${{ steps.routing.outputs.backend }}"
+          SA=$(grep -E '^storage_account_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          CONTAINER=$(grep -E '^container_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          BLOB="sa-tfstateenv:${{ env.TF_WORKSPACE }}"
+          echo "Break lock sur $SA/$CONTAINER/$BLOB..."
+          az storage blob lease break \
+            --account-name "$SA" \
+            --container-name "$CONTAINER" \
+            --blob-name "$BLOB" \
+            --auth-mode login 2>/dev/null \
+            && echo "Lock libere" || echo "Pas de lock actif"
+
+      - name: "6c. Get token for Terraform modules"
+        id: get_token_tf
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+          revoke: false
+
+      # ========================================================================
+      # ETAPE 7 : Terraform Init + Workspace
+      # ========================================================================
+      - name: "7. Terraform Init + Workspace"
+        working-directory: terraform-az-services/Automation_Services_Keyvault
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+          GITHUB_TOKEN:        ${{ steps.get_token_tf.outputs.token }}
+        run: |
+          set -euo pipefail
+          echo "machine github.com login x-access-token password ${GITHUB_TOKEN}" > ~/.netrc
+          chmod 600 ~/.netrc
+          unset TF_WORKSPACE
+          terraform init -reconfigure -backend-config="${{ steps.routing.outputs.backend }}"
+          terraform workspace new "${{ env.TF_WORKSPACE }}" 2>/dev/null || \
+          terraform workspace select "${{ env.TF_WORKSPACE }}"
+          rm -f ~/.netrc
+
+      # ========================================================================
+      # ETAPE 8a : Calcul noms RG + KV
+      # ========================================================================
+      - name: "8a. Calcul noms ressources (RG + KV)"
+        id: names
+        run: |
+          set -euo pipefail
+          RG=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-RG${{ inputs.resource_group_inc }}" | tr '[:lower:]' '[:upper:]')
+          KV=$(echo "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-KV${{ inputs.keyvault_inc }}" | tr '[:lower:]' '[:upper:]')
+          echo "rg=$RG" >> "$GITHUB_OUTPUT"
+          echo "kv=$KV" >> "$GITHUB_OUTPUT"
+          echo "RG=$RG | KV=$KV"
+
+      # ========================================================================
+      # ETAPE 8b : Import ressources existantes + resolution PE
+      #
+      # Logique PE :
+      #   - KV existe -> import RG + KV + PE attache -> pas de creation
+      #   - KV n existe pas -> trouver premier PE libre -> Terraform cree tout
+      # ========================================================================
+      - name: "8b. Import ressources existantes + resolution PE"
+        working-directory: terraform-az-services/Automation_Services_Keyvault
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          set -euo pipefail
+          SUB="${{ inputs.subscription_id }}"
+          RG_NAME="${{ steps.names.outputs.rg }}"
+          KV_NAME="${{ steps.names.outputs.kv }}"
+          PLAQUE="${{ inputs.plaque }}"
+          ENV="${{ inputs.env }}"
+          APP_ID="${{ inputs.application_id }}"
+          START_INC="${{ inputs.keyvault_inc }}"
+
+          # ── Import Resource Group ───────────────────────────────────────────
+          EXPECTED_RG_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}"
+          RG_EXISTS=$(az group exists --name "$RG_NAME" --subscription "$SUB")
+
+          if [ "$RG_EXISTS" = "true" ]; then
+            # Verifier que le RG dans le state correspond bien au RG cible
+            # Si un ancien RG (incrément différent) est dans le state -> le retirer sans destroy Azure
+            if terraform state list | grep -qF "module.rg.azurerm_resource_group.rg"; then
+              STATE_RG_ID=$(terraform state show "module.rg.azurerm_resource_group.rg" 2>/dev/null \
+                | grep "^.*id " | head -1 | sed -E 's/.*= *"([^"]+)".*/\1/' || echo "")
+              if [ -n "$STATE_RG_ID" ] && [ "$STATE_RG_ID" != "$EXPECTED_RG_ID" ]; then
+                echo "RG dans le state ($STATE_RG_ID) different du RG cible ($RG_NAME)"
+                echo "Nettoyage du state (sans destroy Azure)..."
+                terraform state rm "module.rg.azurerm_resource_group.rg" || true
+                terraform state rm "module.keyvault.azurerm_key_vault.keyvault" || true
+                terraform state rm "module.private_endpoint.azurerm_private_endpoint.endpoint" || true
+                echo "State nettoye. Import du nouveau RG..."
+                terraform import -var-file="${{ env.TF_VARFILE }}" \
+                  "module.rg.azurerm_resource_group.rg" "$EXPECTED_RG_ID"
+              else
+                echo "RG deja dans le state avec le bon ID. Import ignore."
+              fi
+            else
+              echo "Import RG dans le state..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" \
+                "module.rg.azurerm_resource_group.rg" "$EXPECTED_RG_ID"
+              echo "Import RG termine."
+            fi
+          else
+            # RG absent -> nettoyer le state s il contient un ancien RG
+            if terraform state list | grep -qF "module.rg.azurerm_resource_group.rg"; then
+              echo "RG absent dans Azure mais present dans le state -> nettoyage state"
+              terraform state rm "module.rg.azurerm_resource_group.rg" || true
+              terraform state rm "module.keyvault.azurerm_key_vault.keyvault" || true
+              terraform state rm "module.private_endpoint.azurerm_private_endpoint.endpoint" || true
+            fi
+            echo "RG absent — sera cree par Terraform."
+          fi
+
+          # ── Verification KV ─────────────────────────────────────────────────
+          KV_ID=$(az keyvault show \
+            --name "$KV_NAME" \
+            --resource-group "$RG_NAME" \
+            --subscription "$SUB" \
+            --query "id" -o tsv 2>/dev/null || echo "")
+
+          if [ -n "$KV_ID" ]; then
+            # ================================================================
+            # CAS 1 : KV EXISTE -> import KV + import PE attache -> pas de creation
+            # ================================================================
+            echo "KV existe dans Azure : $KV_ID"
+
+            # Verifier que le KV dans le state correspond bien au KV cible
+            if terraform state list | grep -qF "module.keyvault.azurerm_key_vault.keyvault"; then
+              STATE_KV_ID=$(terraform state show "module.keyvault.azurerm_key_vault.keyvault" 2>/dev/null \
+                | grep "^.*id " | head -1 | sed -E 's/.*= *"([^"]+)".*/\1/' || echo "")
+              if [ -n "$STATE_KV_ID" ] && [ "$STATE_KV_ID" != "$KV_ID" ]; then
+                echo "KV dans le state different du KV cible -> nettoyage state"
+                terraform state rm "module.keyvault.azurerm_key_vault.keyvault" || true
+                terraform state rm "module.private_endpoint.azurerm_private_endpoint.endpoint" || true
+                echo "Import KV dans le state..."
+                terraform import -var-file="${{ env.TF_VARFILE }}" \
+                  "module.keyvault.azurerm_key_vault.keyvault" "$KV_ID"
+              else
+                echo "KV deja dans le state avec le bon ID. Import ignore."
+              fi
+            else
+              echo "Import KV dans le state..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" \
+                "module.keyvault.azurerm_key_vault.keyvault" "$KV_ID"
+              echo "Import KV termine."
+            fi
+
+            # Chercher le PE attache au KV dans Azure
+            echo "Recherche du PE attache au KV..."
+            ATTACHED_PE=$(az network private-endpoint list \
+              --resource-group "$RG_NAME" \
+              --subscription "$SUB" \
+              --query "[?privateLinkServiceConnections[0].privateLinkServiceId=='${KV_ID}'].name" \
+              -o tsv 2>/dev/null | head -1 || echo "")
+
+            if [ -n "$ATTACHED_PE" ]; then
+              echo "PE attache au KV trouve : $ATTACHED_PE"
+              PE_INC="${ATTACHED_PE##*PE}"
+              echo "TF_VAR_PE_INC=${PE_INC}" >> "$GITHUB_ENV"
+
+              # Import PE dans le state si absent
+              PE_ADDRESS="module.private_endpoint.azurerm_private_endpoint.endpoint"
+              PE_FULL_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Network/privateEndpoints/${ATTACHED_PE}"
+
+              if terraform state list | grep -qF "${PE_ADDRESS}"; then
+                echo "PE deja dans le state. Import ignore."
+              else
+                echo "Import PE dans le state..."
+                terraform import -var-file="${{ env.TF_VARFILE }}" \
+                  "$PE_ADDRESS" "$PE_FULL_ID"
+                echo "Import PE termine."
+              fi
+            else
+              echo "::error::KV existe mais aucun PE attache trouve dans le RG $RG_NAME"
+              exit 1
+            fi
+
+          else
+            # ================================================================
+            # CAS 2 : KV N'EXISTE PAS -> trouver premier PE libre -> Terraform cree tout
+            # ================================================================
+            echo "KV absent dans Azure — sera cree par Terraform."
+            echo "Recherche du premier slot PE libre dans Azure..."
+
+            INC=$(( 10#$START_INC ))
+            PE_RESOLVED_NAME=""
+            PE_RESOLVED_INC=""
+
+            while [ "$INC" -le 99 ]; do
+              INC_PAD=$(printf "%02d" "$INC")
+              CANDIDATE="${PLAQUE}-${ENV}-${APP_ID}-PE${INC_PAD}"
+
+              EXISTS=$(az network private-endpoint show \
+                --name "$CANDIDATE" \
+                --resource-group "$RG_NAME" \
+                --subscription "$SUB" \
+                --query "id" -o tsv 2>/dev/null || echo "")
+
+              if [ -z "$EXISTS" ]; then
+                PE_RESOLVED_NAME="$CANDIDATE"
+                PE_RESOLVED_INC="$INC_PAD"
+                echo "Slot PE libre trouve : $PE_RESOLVED_NAME (inc=$PE_RESOLVED_INC)"
+                break
+              fi
+
+              echo "PE $CANDIDATE existe deja → increment"
+              INC=$(( INC + 1 ))
+            done
+
+            if [ -z "$PE_RESOLVED_NAME" ]; then
+              echo "::error::Aucun slot PE disponible jusqu a PE99 dans $RG_NAME"
+              exit 1
+            fi
+
+            echo "TF_VAR_PE_INC=${PE_RESOLVED_INC}" >> "$GITHUB_ENV"
+            echo "PE sera cree par Terraform : $PE_RESOLVED_NAME (TF_VAR_PE_INC=$PE_RESOLVED_INC)"
+          fi
+
+      # ========================================================================
+      # ETAPE 9 : Plan / Apply / Destroy
+      # ========================================================================
+      - name: "9. Terraform Plan"
+        if: inputs.operation != 'destroy'
+        working-directory: terraform-az-services/Automation_Services_Keyvault
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: terraform plan -var-file="${{ env.TF_VARFILE }}" -out="${{ env.TF_PLANFILE }}"
+
+      - name: "9. Terraform Apply"
+        if: inputs.operation == 'apply'
+        working-directory: terraform-az-services/Automation_Services_Keyvault
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: terraform apply -input=false -auto-approve "${{ env.TF_PLANFILE }}"
+
+      - name: "9. Terraform Destroy"
+        if: inputs.operation == 'destroy'
+        working-directory: terraform-az-services/Automation_Services_Keyvault
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          terraform destroy -auto-approve \
+            -var-file="${{ env.TF_VARFILE }}" \
+            -target=module.keyvault \
+            -target=module.private_endpoint

@@ -1,0 +1,4 @@
+resource_group_name  = "EM50-PRD-INFRS-PRD-RG01"
+storage_account_name = "em50hubinfrssta01"
+container_name       = "tfstate-prd"
+key                  = "fs-tfstate"

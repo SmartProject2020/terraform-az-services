@@ -1,0 +1,316 @@
+name: Terraform - Application Gateway
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Terraform operation"
+        required: true
+        type: choice
+        options: [plan, apply, destroy]
+
+      target_rg:
+        description: "Resource Group cible (ex: EM50-NPR-ANSIB-DEV-RG01)"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs: 
+  plan:
+    runs-on: ubuntu-22.04
+
+    outputs:
+      workspace: ${{ steps.routing.outputs.workspace }}
+      subscription_id: ${{ steps.routing.outputs.subscription_id }}
+      secret_name: ${{ steps.routing.outputs.secret_name }}
+      backend_rg: ${{ steps.routing.outputs.backend_rg }}
+      storage_account: ${{ steps.routing.outputs.storage_account }}
+
+    steps:
+    # ==========================================================================
+    # Safety check
+    # ==========================================================================
+    - name: "Safety check - Block destroy operations in PRODUCTION"
+      if: inputs.operation == 'destroy'
+      run: |
+        RG="${{ inputs.target_rg }}"
+        SETTING=$(echo $RG | cut -d'-' -f2)
+
+        if [ "$SETTING" = "PRD" ]; then
+          echo "::error::DESTROY interdit en PRD"
+          exit 1
+        fi
+
+
+    # ==========================================================================
+    # 1. Token + Checkout
+    # ==========================================================================
+    - name: "1a. Token GitHub App"
+      id: app_token
+      uses: tibdex/github-app-token@v2
+      with:
+        app_id:          ${{ vars.GH_APP_ID }}
+        private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+        installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+
+    - name: "1b. Checkout terraform-az-services"
+      uses: actions/checkout@v4
+      with:
+        repository: servier-github/terraform-az-services
+        ref: features/syv
+        token: ${{ steps.app_token.outputs.token }}
+        path: terraform-az-services
+
+    - name: "1c. Checkout Terraform Modules"
+      uses: actions/checkout@v4
+      with:
+        repository: servier-github/Azure_Terraform_Modules
+        ref: features/syv
+        token: ${{ steps.app_token.outputs.token }}
+        path: Azure_Terraform_Modules
+
+
+    # ==========================================================================
+    # 2. Routing global (OIDC + Backend + Terraform)
+    # ==========================================================================
+    - name: "2. Routing - OIDC + Backend + Terraform context"
+      id: routing
+      run: |
+        set -euo pipefail
+
+        RG="${{ inputs.target_rg }}"
+
+        PLAQUE=$(echo $RG | cut -d'-' -f1)
+        SETTING=$(echo $RG | cut -d'-' -f2)
+        APP=$(echo $RG | cut -d'-' -f3)
+        ENV=$(echo $RG | cut -d'-' -f4)
+
+        SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_${SETTING}"
+
+        BACKEND_RG="${PLAQUE}-${SETTING}-INFRS-${SETTING}-RG01"
+        STORAGE_ACCOUNT=$(echo "${PLAQUE}${SETTING}infrssta01" | tr '[:upper:]' '[:lower:]')
+
+        if [ "$SETTING" == "PRD" ]; then
+          CONTAINER="tfstate-prd"
+        else
+          CONTAINER="tfstate-$(echo $ENV | tr '[:upper:]' '[:lower:]')"
+        fi
+
+        KEY="${RG}.tfstate"
+        WORKSPACE=$(echo $RG | tr '[:upper:]' '[:lower:]')
+        TFVARS="vars/${PLAQUE}-${SETTING}-${APP}-${ENV}.tfvars"
+
+        case "$PLAQUE-$SETTING" in
+          EM50-NPR)
+            SUBSCRIPTION_ID="${{ vars.SUB_EM50_NPR }}"
+            ;;
+          EM50-PRD)
+            SUBSCRIPTION_ID="${{ vars.SUB_EM50_PRD }}"
+            ;;
+          *)
+            echo "::error::Mapping subscription inconnu"
+            exit 1
+            ;;
+        esac
+
+        echo "secret_name=$SECRET_NAME" >> $GITHUB_OUTPUT
+        echo "subscription_id=$SUBSCRIPTION_ID" >> $GITHUB_OUTPUT
+        echo "backend_rg=$BACKEND_RG" >> $GITHUB_OUTPUT
+        echo "storage_account=$STORAGE_ACCOUNT" >> $GITHUB_OUTPUT
+        echo "container=$CONTAINER" >> $GITHUB_OUTPUT
+        echo "key=$KEY" >> $GITHUB_OUTPUT
+        echo "workspace=$WORKSPACE" >> $GITHUB_OUTPUT
+        echo "tfvars=$TFVARS" >> $GITHUB_OUTPUT
+
+
+    # ==========================================================================
+    # 3. Azure Login
+    # ==========================================================================
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id:       ${{ secrets[steps.routing.outputs.secret_name] }}
+        tenant-id:       ${{ vars.AZURE_TENANT_ID }}
+        subscription-id: ${{ steps.routing.outputs.subscription_id }}
+
+
+    # ==========================================================================
+    # 4. Validation Azure
+    # ==========================================================================
+    - name: "4. Validation - Azure resources"
+      run: |
+        set -euo pipefail
+
+        az group show --name "${{ inputs.target_rg }}" >/dev/null \
+          || { echo "::error::RG cible introuvable"; exit 1; }
+
+        az group show --name "${{ steps.routing.outputs.backend_rg }}" >/dev/null \
+          || { echo "::error::RG backend introuvable"; exit 1; }
+
+        az storage account show \
+          --name "${{ steps.routing.outputs.storage_account }}" \
+          --resource-group "${{ steps.routing.outputs.backend_rg }}" >/dev/null \
+          || { echo "::error::Storage account introuvable"; exit 1; }
+
+        echo "✅ Azure validation OK"
+
+
+    # ==========================================================================
+    # 5. Terraform setup
+    # ==========================================================================
+    - name: "5. Setup Terraform"
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.7.5"
+
+
+    # ==========================================================================
+    # 6. Terraform Init + Plan
+    # ==========================================================================
+    - name: "6a. Configure Git auth for Terraform modules"
+      run: |
+        git config --global url."https://x-access-token:${{ steps.app_token.outputs.token }}@github.com/".insteadOf "https://github.com/"
+
+    - name: "6b. Terraform Init"
+      working-directory: terraform-az-services/Automation_Services_ApplicationGateway
+      env:
+        ARM_USE_OIDC: "true"
+        ARM_CLIENT_ID: ${{ secrets[steps.routing.outputs.secret_name] }}
+        ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+        ARM_SUBSCRIPTION_ID: ${{ steps.routing.outputs.subscription_id }}
+      run: |
+        terraform init -reconfigure \
+          -backend-config="resource_group_name=${{ steps.routing.outputs.backend_rg }}" \
+          -backend-config="storage_account_name=${{ steps.routing.outputs.storage_account }}" \
+          -backend-config="container_name=${{ steps.routing.outputs.container }}" \
+          -backend-config="key=${{ steps.routing.outputs.key }}"
+
+    - name: "6c.Workspace"
+      working-directory: terraform-az-services/Automation_Services_ApplicationGateway
+      env:
+        ARM_USE_OIDC: "true"
+        ARM_CLIENT_ID: ${{ secrets[steps.routing.outputs.secret_name] }}
+        ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+        ARM_SUBSCRIPTION_ID: ${{ steps.routing.outputs.subscription_id }}
+
+      run: |
+        terraform workspace select "${{ steps.routing.outputs.workspace }}" \
+        || terraform workspace new "${{ steps.routing.outputs.workspace }}"
+
+    - name: "6d. Terraform Plan"
+      if: inputs.operation != 'destroy'
+      working-directory: terraform-az-services/Automation_Services_ApplicationGateway
+      env:
+        TF_VAR_resource_group_name: ${{ inputs.target_rg }}
+
+        ARM_USE_OIDC: "true"
+        ARM_CLIENT_ID: ${{ secrets[steps.routing.outputs.secret_name] }}
+        ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+        ARM_SUBSCRIPTION_ID: ${{ steps.routing.outputs.subscription_id }}
+
+      run: |
+        TFVARS_PATH="${{ steps.routing.outputs.tfvars }}"
+
+        if [ -f "$TFVARS_PATH" ]; then
+          echo "✅ Utilisation du tfvars: $TFVARS_PATH"
+          terraform plan \
+            -input=false \
+            -lock-timeout=300s \
+            -var-file="$TFVARS_PATH" \
+            -out=tfplan
+        else
+          echo "⚠️ Aucun tfvars trouvé → fallback variables via TF_VAR_*"
+          terraform plan \
+            -input=false \
+            -out=tfplan
+        fi
+
+    - name: Upload tfplan
+      if: inputs.operation == 'apply'
+      uses: actions/upload-artifact@v4
+      with:
+        name: tfplan
+        path: terraform-az-services/Automation_Services_ApplicationGateway/tfplan
+
+    # ==========================================================================
+    # 7. Terraform Apply (avec approval)
+    # ==========================================================================
+  apply:
+    needs: plan
+    if: inputs.operation == 'apply'
+    runs-on: ubuntu-22.04
+    environment: production
+
+    steps:
+    - name: Routing
+      id: routing
+      run: |
+        set -euo pipefail
+
+        RG="${{ inputs.target_rg }}"
+
+        PLAQUE=$(echo $RG | cut -d'-' -f1)
+        SETTING=$(echo $RG | cut -d'-' -f2)
+        ENV=$(echo $RG | cut -d'-' -f4)
+
+        SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_${SETTING}"
+
+        case "$PLAQUE-$SETTING" in
+          EM50-NPR)
+            SUBSCRIPTION_ID="${{ vars.SUB_EM50_NPR }}"
+            ;;
+          EM50-PRD)
+            SUBSCRIPTION_ID="${{ vars.SUB_EM50_PRD }}"
+            ;;
+          *)
+            echo "::error::Mapping subscription inconnu"
+            exit 1
+            ;;
+        esac
+
+        echo "secret_name=$SECRET_NAME" >> $GITHUB_OUTPUT
+        echo "subscription_id=$SUBSCRIPTION_ID" >> $GITHUB_OUTPUT
+
+    - name: "7a. Token GitHub App"
+      id: app_token
+      uses: tibdex/github-app-token@v2
+      with:
+        app_id:          ${{ vars.GH_APP_ID }}
+        private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+        installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+
+    - name: "7b. Checkout repo"
+      uses: actions/checkout@v4
+      with:
+        repository: servier-github/terraform-az-services
+        path: terraform-az-services
+
+    - name: "7c. Download plan"
+      uses: actions/download-artifact@v4
+      with:
+        name: tfplan
+        path: terraform-az-services/Automation_Services_ApplicationGateway
+    
+    - name: "7d. Configure Git auth for Terraform modules"
+      run: |
+        git config --global url."https://x-access-token:${{ steps.app_token.outputs.token }}@github.com/".insteadOf "https://github.com/"
+
+    - name: "7e. Terraform Apply"
+      working-directory: terraform-az-services/Automation_Services_ApplicationGateway
+      run: |
+        
+        terraform apply \
+          -auto-approve tfplan
+          -lock-timeout=300s \
+  # ============================================================
+  # 8. Terraform Destroy
+  # ============================================================
+  destroy:
+    if: inputs.operation == 'destroy'
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: "8. Terraform Destroy"
+        run: echo "⚠️ Ajouter ici destroy complet si nécessaire"

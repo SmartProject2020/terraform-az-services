@@ -1,0 +1,556 @@
+# ==============================================================================
+#
+# Ce workflow cree en CASCADE :
+#   1. Resource Group        (si absent → créé)
+#   2. Storage Account       (FileStorage public, si absent → créé)
+#   3. Azure File Shares     (liste JSON)
+#   4. AD join               (si azure_ad_authentication=true → déclenche
+#                             terraform-register-fileshare.yml via API GitHub)
+#
+# Différence clé avec terraform-fileshare.yml :
+#   -> Ce workflow ne requiert pas que le SA existe au préalable.
+#   -> Il crée le RG et le SA si nécessaire, puis les fileshares.
+#
+# SA toujours FileStorage public (requis pour AD join Kerberos).
+# Pas de Private Endpoint dans ce workflow.
+# ==============================================================================
+
+name: Terraform - Acquisition Fileshare
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      operation:
+        description: "Operation Terraform"
+        required: true
+        type: choice
+        options: [plan, apply, destroy]
+
+      subscription_id:
+        description: "Azure Subscription ID cible"
+        required: true
+        type: string
+
+      plaque:
+        description: "Plaque (EM50, AM50, AP50, GL50)"
+        required: true
+        type: choice
+        options: [EM50, AM50, AP50, GL50]
+
+      application_id:
+        description: "Application ID (ex: NXGEN, GEOWI)"
+        required: true
+        type: string
+
+      setting:
+        description: "Setting"
+        required: true
+        type: choice
+        options: [NPR, PRD]
+
+      env:
+        description: "Environnement applicatif"
+        required: true
+        type: choice
+        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
+
+      servier_environment:
+        description: "Servier Environment"
+        required: true
+        type: choice
+        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
+
+      resource_group_inc:
+        description: "Increment du Resource Group (ex: 01)"
+        required: true
+        default: "01"
+        type: string
+
+      storage_account_inc:
+        description: "Increment du Storage Account (ex: 01)"
+        required: true
+        default: "01"
+        type: string
+
+      storage_account_kind:
+        description: "Kind du Storage Account"
+        required: true
+        type: choice
+        options: [FileStorage, StorageV2]
+        default: "FileStorage"
+
+      storage_account_replication_type:
+        description: "Type de replication (FileStorage : LRS ou ZRS uniquement)"
+        required: true
+        type: choice
+        options: [LRS, ZRS, GRS]
+        default: "LRS"
+
+      fileshares:
+        description: 'Liste des fileshares (JSON array, ex: ["TEST","Home","logs"])'
+        required: true
+        type: string
+
+      quota_gb:
+        description: "Quota en GB par fileshare"
+        required: false
+        default: "100"
+        type: string
+
+      azure_ad_authentication:
+        description: "Declencher l AD join apres creation (terraform-register-fileshare)"
+        required: false
+        type: choice
+        options: ["true", "false"]
+        default: "true"
+
+      location:
+        description: "Azure Region"
+        required: true
+        default: "France Central"
+        type: string
+
+      terraform_version:
+        description: "Version Terraform"
+        required: false
+        default: "1.7.5"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    name: "Terraform ${{ inputs.operation }} — Acquisition/${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }}/${{ inputs.application_id }}/sta${{ inputs.storage_account_inc }}"
+    runs-on: [Automation_linux_pool]
+
+    env:
+      TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-acquisition-fileshare-${{ inputs.storage_account_inc }}"
+      TF_VARFILE:   "vars/${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-acquisition-fileshare-${{ inputs.storage_account_inc }}.tfvars"
+      TF_PLANFILE:  "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-acquisition-fileshare-${{ inputs.storage_account_inc }}.tfplan"
+
+      # Variables Terraform injectées via TF_VAR_*
+      TF_VAR_PLAQUE:                           "${{ inputs.plaque }}"
+      TF_VAR_ENV:                              "${{ inputs.env }}"
+      TF_VAR_SETTING:                          "${{ inputs.setting }}"
+      TF_VAR_APPLICATION_ID:                   "${{ inputs.application_id }}"
+      TF_VAR_RESOURCE_GROUP_INC:               "${{ inputs.resource_group_inc }}"
+      TF_VAR_STORAGE_ACCOUNT_INC:              "${{ inputs.storage_account_inc }}"
+      TF_VAR_STORAGE_ACCOUNT_KIND:             "${{ inputs.storage_account_kind }}"
+      TF_VAR_STORAGE_ACCOUNT_REPLICATION_TYPE: "${{ inputs.storage_account_replication_type }}"
+      # STORAGE_ACCOUNT_TIER : dérivé à l'étape 6 (Standard/Premium selon kind)
+      # STORAGE_ACCOUNT_ACCESS_TIER : fixe Hot (via tfvars)
+
+    steps:
+      - name: "0. Inputs recus (ServiceNow -> GitHub Actions)"
+        run: |
+          echo "=================================================="
+          echo "  INPUTS RECUS"
+          echo "=================================================="
+          echo "  operation              : ${{ inputs.operation }}"
+          echo "  subscription_id        : ${{ inputs.subscription_id }}"
+          echo "  plaque                 : ${{ inputs.plaque }}"
+          echo "  application_id         : ${{ inputs.application_id }}"
+          echo "  setting                : ${{ inputs.setting }}"
+          echo "  env                    : ${{ inputs.env }}"
+          echo "  servier_environment    : ${{ inputs.servier_environment }}"
+          echo "  resource_group_inc     : ${{ inputs.resource_group_inc }}"
+          echo "  storage_account_inc    : ${{ inputs.storage_account_inc }}"
+          echo "  storage_account_kind   : ${{ inputs.storage_account_kind }}"
+          echo "  replication_type       : ${{ inputs.storage_account_replication_type }}"
+          echo "  fileshares             : ${{ inputs.fileshares }}"
+          echo "  quota_gb               : ${{ inputs.quota_gb }}"
+          echo "  azure_ad_authentication: ${{ inputs.azure_ad_authentication }}"
+          echo "  location               : ${{ inputs.location }}"
+          echo "=================================================="
+          echo "  TF_WORKSPACE           : ${{ env.TF_WORKSPACE }}"
+          echo "=================================================="
+      # ========================================================================
+      # GARDE-FOUS
+      # ========================================================================
+      - name: "BLOCAGE — fileshares non vide"
+        if: inputs.fileshares == '[]' || inputs.fileshares == ''
+        run: |
+          echo "::error::Le parametre fileshares est obligatoire (ex: [\"TEST\",\"COUCOU\"])"
+          exit 1
+
+      - name: "BLOCAGE — destroy interdit en PRD"
+        if: inputs.setting == 'PRD' && inputs.operation == 'destroy'
+        run: |
+          echo "::error::DESTROY est interdit en setting PRD"
+          exit 1
+
+      - name: "BLOCAGE — FileStorage replication LRS/ZRS uniquement"
+        if: inputs.storage_account_kind == 'FileStorage' && inputs.storage_account_replication_type == 'GRS'
+        run: |
+          echo "::error::FileStorage ne supporte pas GRS. Choisir LRS ou ZRS."
+          exit 1
+
+      - name: "Clean git extraheader"
+        run: git config --global --unset-all http.https://github.com/.extraheader || true
+
+      # ========================================================================
+      # ETAPE 1 : Token GitHub App
+      # ========================================================================
+      - name: "1. Generer le token GitHub App"
+        id: app-token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+
+      # ========================================================================
+      # ETAPE 2 : Checkout terraform-az-services
+      # ========================================================================
+      - name: "2. Checkout terraform-az-services"
+        uses: actions/checkout@v4
+        with:
+          repository: servier-github/terraform-az-services
+          ref:        ${{ github.ref_name }}
+          token:      ${{ steps.app-token.outputs.token }}
+          path:       terraform-az-services
+          persist-credentials: false
+
+      # ========================================================================
+      # ETAPE 3 : Résolution secret OIDC + backend
+      # ========================================================================
+      - name: "3. Resolution secret OIDC + backend"
+        id: routing
+        run: |
+          set -euo pipefail
+          SETTING="${{ inputs.setting }}"
+          PLAQUE="${{ inputs.plaque }}"
+          ENV="${{ inputs.env }}"
+          SUBSCRIPTION_ID="${{ inputs.subscription_id }}"
+
+          MG_GL_SUBS=(
+            "a96e6018-b2ce-46e9-a92b-50bf64b1e6cb"
+            "fc23aeec-0740-4b1e-a80b-510195d94869"
+            "3bc8f7fd-5621-4832-9147-01ed59c7fe2e"
+            "7553fb7b-0db0-49e5-8227-d87872c206fd"
+          )
+          IS_MG_GL="false"
+          for sub in "${MG_GL_SUBS[@]}"; do
+            [ "$SUBSCRIPTION_ID" = "$sub" ] && IS_MG_GL="true" && break
+          done
+
+          if [ "$IS_MG_GL" = "true" ]; then
+            SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_MG_GL_PRD"
+            BACKEND_FILE="backends/${PLAQUE}-HUB.tfbackend"
+          elif [ "$SETTING" = "PRD" ]; then
+            SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_PRD"
+            BACKEND_FILE="backends/${PLAQUE}-PRD.tfbackend"
+          else
+            SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_NPR"
+            BACKEND_FILE="backends/${PLAQUE}-${ENV}.tfbackend"
+          fi
+
+          echo "secret_name=$SECRET_NAME"   >> "$GITHUB_OUTPUT"
+          echo "backend_file=$BACKEND_FILE" >> "$GITHUB_OUTPUT"
+          echo "Secret : $SECRET_NAME | Backend : $BACKEND_FILE"
+
+      # ========================================================================
+      # ETAPE 4 : Azure Login (OIDC)
+      # ========================================================================
+      - name: "4. Azure Login (OIDC)"
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets[steps.routing.outputs.secret_name] }}
+          tenant-id:       ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ inputs.subscription_id }}
+
+      # ========================================================================
+      # ETAPE 5 : Install Terraform
+      # ========================================================================
+      - name: "5. Install Terraform ${{ inputs.terraform_version }}"
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+
+      # ========================================================================
+      # ETAPE 6 : Dérivation STORAGE_ACCOUNT_TIER selon kind
+      # ========================================================================
+      - name: "6. Derivation storage_account_tier"
+        id: derived
+        run: |
+          set -euo pipefail
+          KIND="${{ inputs.storage_account_kind }}"
+          if [ "$KIND" = "FileStorage" ]; then
+            TIER="Premium"
+          else
+            TIER="Standard"
+          fi
+          echo "storage_account_tier=$TIER" >> "$GITHUB_OUTPUT"
+          echo "Tier derive : $TIER (kind=$KIND)"
+
+      # ========================================================================
+      # ETAPE 7 : Génération tfvars
+      # ========================================================================
+      - name: "7. Generation tfvars"
+        working-directory: terraform-az-services/Automation_Services_Acquisition_Fileshare
+        run: |
+          set -euo pipefail
+          mkdir -p vars
+
+          SERVIER_ENV="${{ inputs.servier_environment }}"
+          FILESHARES='${{ inputs.fileshares }}'
+          QUOTA="${{ inputs.quota_gb }}"
+
+          cat > "${{ env.TF_VARFILE }}" <<EOF
+          location                               = "${{ inputs.location }}"
+          servier_environment                    = "${SERVIER_ENV}"
+          fileshares                             = ${FILESHARES}
+          quota_gb                               = ${QUOTA}
+          STORAGE_ACCOUNT_TIER                   = "${{ steps.derived.outputs.storage_account_tier }}"
+          STORAGE_ACCOUNT_ACCESS_TIER            = "Hot"
+          blob_delete_retention_policy_days      = 7
+          container_delete_retention_policy_days = 7
+          EOF
+
+          echo "tfvars genere :"
+          cat "${{ env.TF_VARFILE }}"
+
+      # ========================================================================
+      # ETAPE 8a : Break state lock si existant
+      # ========================================================================
+      - name: "8a. Break state lock si existant"
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+        run: |
+          BACKEND_FILE="terraform-az-services/Automation_Services_Acquisition_Fileshare/${{ steps.routing.outputs.backend_file }}"
+          if [ ! -f "$BACKEND_FILE" ]; then
+            echo "Fichier backend introuvable : $BACKEND_FILE — skip break lock"
+            exit 0
+          fi
+          SA=$(grep -E '^storage_account_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          CONTAINER=$(grep -E '^container_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          BLOB="sa-tfstateenv:${{ env.TF_WORKSPACE }}"
+          az storage blob lease break \
+            --account-name "$SA" \
+            --container-name "$CONTAINER" \
+            --blob-name "$BLOB" \
+            --auth-mode login 2>/dev/null \
+            && echo "Lock libere" || echo "Pas de lock actif"
+
+      # ========================================================================
+      # ETAPE 8b : Token pour téléchargement modules privés
+      # ========================================================================
+      - name: "8b. Token modules privés"
+        id: get_token_tf
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+          revoke: false
+
+      # ========================================================================
+      # ETAPE 9 : Terraform Init + Workspace
+      # ========================================================================
+      - name: "9. Terraform Init + Workspace"
+        working-directory: terraform-az-services/Automation_Services_Acquisition_Fileshare
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+          GITHUB_TOKEN:        ${{ steps.get_token_tf.outputs.token }}
+        run: |
+          set -euo pipefail
+          echo "machine github.com login x-access-token password ${GITHUB_TOKEN}" > ~/.netrc
+          chmod 600 ~/.netrc
+          unset TF_WORKSPACE
+          terraform init -reconfigure -backend-config="${{ steps.routing.outputs.backend_file }}"
+          terraform workspace new "${{ env.TF_WORKSPACE }}" 2>/dev/null || \
+            terraform workspace select "${{ env.TF_WORKSPACE }}"
+          rm -f ~/.netrc
+
+      # ========================================================================
+      # ETAPE 10 : Calcul noms ressources (RG + SA)
+      # ========================================================================
+      - name: "10. Calcul noms ressources"
+        id: names
+        run: |
+          set -euo pipefail
+          RG=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-RG${{ inputs.resource_group_inc }}" | tr '[:lower:]' '[:upper:]')
+          SA=$(echo "${{ inputs.plaque }}${{ inputs.env }}${{ inputs.application_id }}sta${{ inputs.storage_account_inc }}" | tr '[:upper:]' '[:lower:]')
+          echo "rg=$RG" >> "$GITHUB_OUTPUT"
+          echo "sa=$SA" >> "$GITHUB_OUTPUT"
+          echo "RG cible : $RG"
+          echo "SA cible : $SA"
+
+      # ========================================================================
+      # ETAPE 11 : Import ressources existantes dans le state
+      #
+      # Logique :
+      #   RG existe  + absent du state → import
+      #   RG existe  + state différent → state rm + import (changement inc)
+      #   RG absent  → Terraform le crée
+      #   SA existe  + absent du state → import
+      #   SA existe  + state différent → state rm + import
+      #   SA absent  → Terraform le crée
+      # ========================================================================
+      - name: "11. Import ressources existantes"
+        working-directory: terraform-az-services/Automation_Services_Acquisition_Fileshare
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+          GITHUB_TOKEN:        ${{ steps.get_token_tf.outputs.token }}
+        run: |
+          set -euo pipefail
+          echo "machine github.com login x-access-token password ${GITHUB_TOKEN}" > ~/.netrc
+          chmod 600 ~/.netrc
+
+          SUB="${{ inputs.subscription_id }}"
+          RG_NAME="${{ steps.names.outputs.rg }}"
+          SA_NAME="${{ steps.names.outputs.sa }}"
+
+          RG_ADDRESS="module.rg.azurerm_resource_group.rg"
+          SA_ADDRESS="module.storage_account.azurerm_storage_account.storage_account"
+          EXPECTED_RG_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}"
+
+          # ── Import Resource Group ──────────────────────────────────────────
+          echo "=== Vérification RG : $RG_NAME ==="
+          RG_EXISTS=$(az group exists --name "$RG_NAME" --subscription "$SUB")
+
+          if [ "$RG_EXISTS" = "true" ]; then
+            if terraform state list 2>/dev/null | grep -qF "${RG_ADDRESS}"; then
+              STATE_RG_ID=$(terraform state show "${RG_ADDRESS}" 2>/dev/null \
+                | grep "^ *id " | head -1 | sed -E 's/.*= *"([^"]+)".*/\1/' || echo "")
+              if [ -n "$STATE_RG_ID" ] && [ "$STATE_RG_ID" != "$EXPECTED_RG_ID" ]; then
+                echo "RG dans le state ≠ RG cible → nettoyage + reimport"
+                terraform state rm "${RG_ADDRESS}" || true
+                terraform state rm "${SA_ADDRESS}" || true
+                terraform import -var-file="${{ env.TF_VARFILE }}" "${RG_ADDRESS}" "${EXPECTED_RG_ID}"
+              else
+                echo "RG déjà dans le state avec le bon ID."
+              fi
+            else
+              echo "Import RG dans le state..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" "${RG_ADDRESS}" "${EXPECTED_RG_ID}"
+            fi
+          else
+            if terraform state list 2>/dev/null | grep -qF "${RG_ADDRESS}"; then
+              echo "RG absent dans Azure mais présent dans le state → nettoyage"
+              terraform state rm "${RG_ADDRESS}" || true
+              terraform state rm "${SA_ADDRESS}" || true
+            fi
+            echo "RG absent — sera créé par Terraform."
+          fi
+
+          # ── Import Storage Account ─────────────────────────────────────────
+          echo "=== Vérification SA : $SA_NAME ==="
+          SA_REAL_ID=$(az storage account show \
+            --name "$SA_NAME" \
+            --subscription "$SUB" \
+            --query "id" -o tsv 2>/dev/null || echo "")
+
+          if [ -n "$SA_REAL_ID" ]; then
+            if terraform state list 2>/dev/null | grep -qF "${SA_ADDRESS}"; then
+              STATE_SA_ID=$(terraform state show "${SA_ADDRESS}" 2>/dev/null \
+                | grep "^ *id " | head -1 | sed -E 's/.*= *"([^"]+)".*/\1/' || echo "")
+              if [ -n "$STATE_SA_ID" ] && [ "$STATE_SA_ID" != "$SA_REAL_ID" ]; then
+                echo "SA dans le state ≠ SA cible → nettoyage + reimport"
+                terraform state rm "${SA_ADDRESS}" || true
+                terraform import -var-file="${{ env.TF_VARFILE }}" "${SA_ADDRESS}" "$SA_REAL_ID"
+              else
+                echo "SA déjà dans le state avec le bon ID."
+              fi
+            else
+              echo "Import SA dans le state..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" "${SA_ADDRESS}" "$SA_REAL_ID"
+            fi
+          else
+            if terraform state list 2>/dev/null | grep -qF "${SA_ADDRESS}"; then
+              echo "SA absent dans Azure mais présent dans le state → nettoyage"
+              terraform state rm "${SA_ADDRESS}" || true
+            fi
+            echo "SA absent — sera créé par Terraform."
+          fi
+
+          rm -f ~/.netrc
+
+      # ========================================================================
+      # ETAPE 12 : Plan / Apply / Destroy
+      # ========================================================================
+      - name: "12a. Terraform Plan"
+        if: inputs.operation != 'destroy'
+        working-directory: terraform-az-services/Automation_Services_Acquisition_Fileshare
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+        run: terraform plan -var-file="${{ env.TF_VARFILE }}" -out="${{ env.TF_PLANFILE }}"
+
+      - name: "12b. Terraform Apply"
+        if: inputs.operation == 'apply'
+        working-directory: terraform-az-services/Automation_Services_Acquisition_Fileshare
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+        run: terraform apply -input=false -auto-approve "${{ env.TF_PLANFILE }}"
+
+      - name: "12c. Terraform Destroy"
+        if: inputs.operation == 'destroy'
+        working-directory: terraform-az-services/Automation_Services_Acquisition_Fileshare
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+        run: |
+          terraform destroy -auto-approve \
+            -var-file="${{ env.TF_VARFILE }}" \
+            -target=module.fileshares \
+            -target=module.storage_account
+
+      # ========================================================================
+      # ETAPE 13 : Déclenchement AD join (si azure_ad_authentication = true)
+      # ========================================================================
+      - name: "13. Declenchement AD join (terraform-register-fileshare)"
+        if: inputs.operation == 'apply' && inputs.azure_ad_authentication == 'true'
+        run: |
+          set -euo pipefail
+          SA_NAME="${{ steps.names.outputs.sa }}"
+          RG_NAME="${{ steps.names.outputs.rg }}"
+
+          echo "Declenchement AD join pour SA : $SA_NAME (RG : $RG_NAME)"
+
+          HTTP_CODE=$(curl -s -o /tmp/gh_response.json -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ steps.app-token.outputs.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/servier-github/terraform-az-services/actions/workflows/terraform-register-fileshare.yml/dispatches" \
+            -d "{
+              \"ref\": \"${{ github.ref_name }}\",
+              \"inputs\": {
+                \"storage_account_name\": \"${SA_NAME}\",
+                \"resource_group_name\":  \"${RG_NAME}\",
+                \"subscription_id\":      \"${{ inputs.subscription_id }}\",
+                \"plaque\":               \"${{ inputs.plaque }}\",
+                \"env\":                  \"${{ inputs.env }}\",
+                \"setting\":              \"${{ inputs.setting }}\",
+                \"application_id\":       \"${{ inputs.application_id }}\",
+                \"storage_account_inc\":  \"${{ inputs.storage_account_inc }}\"
+              }
+            }")
+
+          if [ "$HTTP_CODE" = "204" ]; then
+            echo "AD join declenche avec succes (HTTP 204)"
+          else
+            echo "::error::Echec declenchement AD join — HTTP $HTTP_CODE"
+            cat /tmp/gh_response.json
+            exit 1
+          fi

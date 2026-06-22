@@ -1,0 +1,385 @@
+# ==============================================================================
+# GitHub Actions - Terraform SQLManagedInstance
+# Auth : OIDC Workload Identity Federation (zero secret)
+# Runner : self-hosted Linux (Automation_linux_pool)
+# ==============================================================================
+
+name: Terraform - SQLMI
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Opération Terraform"
+        required: true
+        type: choice
+        options: [plan, apply, destroy]
+      subscription_id:
+        description: "Azure Subscription ID"
+        required: true
+        type: string
+      plaque:
+        description: "Plaque"
+        required: true
+        type: choice
+        options: [EM50, AM50, AP50, GL50]
+      application_id:
+        description: "Application ID"
+        required: true
+        type: string
+
+      setting:
+        description: "Setting (zone de déploiement)"
+        required: true
+        type: choice
+        options: [NPR, PRD]
+      env:
+        description: "Environnement applicatif"
+        required: true
+        type: choice
+        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
+      servier_environment:
+        description: "Servier Environment (utilisé en NPRD)"
+        required: true
+        type: choice
+        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
+      location:
+        description: "Azure Region"
+        required: true
+        default: "France Central"
+        type: string
+      resource_group_inc:
+        description: "Incrément Resource Group"
+        required: true
+        default: "01"
+        type: string
+      terraform_version:
+        description: "Version Terraform"
+        required: false
+        default: "1.7.5"
+        type: string
+      Beneficiary:
+        description: "Beneficiary"
+        required: true
+        type: string
+      Sizing:
+        description: "VM Sizing"
+        required: true
+        type: choice
+        options: [Standard,Medium,High]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    name: "Terraform ${{ inputs.operation }} - ${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }}"
+    runs-on: [Automation_linux_pool]
+    env:
+      TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-${{ inputs.resource_group_inc }}"
+      TF_VARFILE:   "vars/${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-${{ inputs.resource_group_inc }}.tfvars"
+      TF_PLANFILE:  "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-${{ inputs.resource_group_inc }}.tfplan"
+      TF_VAR_PLAQUE:             "${{ inputs.plaque }}"
+      TF_VAR_ENV:                "${{ inputs.env }}"
+      TF_VAR_APPLICATION_ID:     "${{ inputs.application_id }}"
+      TF_VAR_SETTING:            "${{ inputs.setting }}"
+      TF_VAR_RESOURCE_GROUP_INC: "${{ inputs.resource_group_inc }}"
+
+    steps:
+      # ========================================================================
+      # ETAPE 0 : Garde-fous
+      # ========================================================================
+      - name: "BLOCAGE - Destroy interdit en PRD"
+        if: inputs.setting == 'PRD' && inputs.operation == 'destroy'
+        run: |
+          echo "::error::DESTROY est interdit en PRD"
+          exit 1
+
+      - name: "Clean git config"
+        run: |
+          git config --global --unset-all http.https://github.com/.extraheader || true
+
+      # ========================================================================
+      # ETAPE 1 : Token GitHub App
+      # ========================================================================
+      - name: "1. Generer le token GitHub App"
+        id: app-token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+
+      # ========================================================================
+      # ETAPE 2 : Checkout repos
+      # ========================================================================
+      - name: "2a. Checkout terraform-az-services"
+        uses: actions/checkout@v4
+        with:
+          repository: servier-github/terraform-az-services
+          ref: ${{ github.ref_name }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: terraform-az-services
+          persist-credentials: false
+      # ========================================================================
+      # ETAPE 3 : Resolution secret Client ID + backend
+      # ========================================================================
+      - name: "3. Resolution secret Client ID + backend"
+        id: routing
+        run: |
+          set -euo pipefail
+
+          SETTING="${{ inputs.setting }}"
+          PLAQUE="${{ inputs.plaque }}"
+          ENV="${{ inputs.env }}"
+          SUBSCRIPTION_ID="${{ inputs.subscription_id }}"
+
+          MG_GL_SUBS=(
+            "a96e6018-b2ce-46e9-a92b-50bf64b1e6cb"
+            "fc23aeec-0740-4b1e-a80b-510195d94869"
+            "3bc8f7fd-5621-4832-9147-01ed59c7fe2e"
+            "7553fb7b-0db0-49e5-8227-d87872c206fd"
+          )
+
+          IS_MG_GL="false"
+          for sub in "${MG_GL_SUBS[@]}"; do
+            if [ "$SUBSCRIPTION_ID" = "$sub" ]; then
+              IS_MG_GL="true"
+              break
+            fi
+          done
+
+          if [ "$IS_MG_GL" = "true" ]; then
+            SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_MG_GL_PRD"
+            BACKEND_FILE="backends/${PLAQUE}-HUB.tfbackend"
+          else
+            SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_${SETTING}"
+            BACKEND_FILE="backends/${PLAQUE}-${ENV}.tfbackend"
+          fi
+
+          echo "secret_name=$SECRET_NAME"   >> "$GITHUB_OUTPUT"
+          echo "backend_file=$BACKEND_FILE" >> "$GITHUB_OUTPUT"
+          echo "Secret name  : $SECRET_NAME"
+          echo "Backend file : $BACKEND_FILE"
+
+      # ========================================================================
+      # ETAPE 4 : Azure Login (OIDC)
+      # ========================================================================
+      - name: "4. Azure Login (OIDC)"
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets[steps.routing.outputs.secret_name] }}
+          tenant-id:       ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ inputs.subscription_id }}
+
+      # ========================================================================
+      # ETAPE 5 : Installation Terraform
+      # ========================================================================
+      - name: "5. Install Terraform ${{ inputs.terraform_version }}"
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+
+      # ========================================================================
+      # ETAPE 6 : Validation subscription + backend
+      # ========================================================================
+      - name: "6. Validation subscription + backend"
+        working-directory: terraform-az-services/Automation_Services_SqlMI
+        run: |
+          set -euo pipefail
+
+          SUBSCRIPTION_NAME=$(az account show \
+            --subscription "${{ inputs.subscription_id }}" \
+            --query "name" -o tsv)
+
+          SETTING="${{ inputs.setting }}"
+          echo "Subscription : $SUBSCRIPTION_NAME | Setting : $SETTING"
+
+          if [ "$SETTING" = "PRD" ]; then
+            if ! echo "$SUBSCRIPTION_NAME" | grep -qiE "\-PRD|\-HUB|HUBCENTRAL"; then
+              echo "::error::Subscription non autorisee dans setting PRD : $SUBSCRIPTION_NAME"
+              exit 1
+            fi
+          else
+            if echo "$SUBSCRIPTION_NAME" | grep -qiE "\-PRD$|_PRD$"; then
+              echo "::error::Subscription PRD detectee dans setting $SETTING : $SUBSCRIPTION_NAME"
+              exit 1
+            fi
+          fi
+
+          BACKEND_FILE="${{ steps.routing.outputs.backend_file }}"
+          if [ ! -f "$BACKEND_FILE" ]; then
+            echo "::error::Fichier backend introuvable : $BACKEND_FILE"
+            ls backends/ || true
+            exit 1
+          fi
+
+          RG=$(grep -E '^resource_group_name'  "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          SA=$(grep -E '^storage_account_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          CONTAINER=$(grep -E '^container_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+
+          echo "Backend -> RG: $RG | SA: $SA | Container: $CONTAINER"
+
+          az group show --name "$RG" --subscription "${{ inputs.subscription_id }}" &>/dev/null \
+            || { echo "::error::Resource group backend introuvable : $RG"; exit 1; }
+
+          az storage account show --name "$SA" --resource-group "$RG" &>/dev/null \
+            || { echo "::error::Storage account backend introuvable : $SA"; exit 1; }
+
+          az storage container show --name "$CONTAINER" --account-name "$SA" --auth-mode login &>/dev/null \
+            || { echo "::error::Container backend introuvable : $CONTAINER"; exit 1; }
+
+          echo "Backend valide avec succes"
+
+      # ========================================================================
+      # ETAPE 7 : Generation tfvars
+      # ========================================================================
+      - name: "7. Generation tfvars"
+        working-directory: terraform-az-services/Automation_Services_SqlMI
+        run: |
+          set -euo pipefail
+          mkdir -p vars
+
+          SERVIER_ENV="${{ inputs.setting == 'PRD' && 'PRD' || inputs.servier_environment }}"
+
+          printf 'location            = "%s"\n' "${{ inputs.location }}"            > "${{ env.TF_VARFILE }}"
+          printf 'servier_environment = "%s"\n' "$SERVIER_ENV"                     >> "${{ env.TF_VARFILE }}"
+          printf 'resource_group_inc  = "%s"\n' "${{ inputs.resource_group_inc }}" >> "${{ env.TF_VARFILE }}"
+
+          echo "tfvars genere :"
+          cat "${{ env.TF_VARFILE }}"
+
+      # ========================================================================
+      # ETAPE 7b : Break state lock orphelin avant init
+      # ========================================================================
+      - name: "7b. Break state lock si existant"
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+        run: |
+          BACKEND_FILE="terraform-az-services/Automation_Services_SqlMI/${{ steps.routing.outputs.backend_file }}"
+          SA=$(grep -E '^storage_account_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          CONTAINER=$(grep -E '^container_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          BLOB="sa-tfstateenv:${{ env.TF_WORKSPACE }}"
+          echo "Break lock sur $SA/$CONTAINER/$BLOB..."
+          az storage blob lease break \
+            --account-name "$SA" \
+            --container-name "$CONTAINER" \
+            --blob-name "$BLOB" \
+            --auth-mode login 2>/dev/null \
+            && echo "Lock libere" || echo "Pas de lock actif"
+
+      - name: "7c. Get token for Terraform modules"
+        id: get_token_tf
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+          revoke: false
+
+      # ========================================================================
+      # ETAPE 8 : Terraform Init + Workspace
+      # ========================================================================
+      - name: "8. Terraform Init + Workspace"
+        working-directory: terraform-az-services/Automation_Services_SqlMI
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+          GITHUB_TOKEN:        ${{ steps.get_token_tf.outputs.token }}
+        run: |
+          set -euo pipefail
+          echo "machine github.com login x-access-token password ${GITHUB_TOKEN}" > ~/.netrc
+          chmod 600 ~/.netrc
+          unset TF_WORKSPACE
+          terraform init -reconfigure -backend-config="${{ steps.routing.outputs.backend_file }}"
+          terraform workspace new "${{ env.TF_WORKSPACE }}" 2>/dev/null || \
+            terraform workspace select "${{ env.TF_WORKSPACE }}"
+          echo "Workspace actif : $(terraform workspace show)"
+          rm -f ~/.netrc
+
+      # ========================================================================
+      # ETAPE 9 : Import RG si existant hors state
+      # ========================================================================
+      - name: "9. Import RG si existant"
+        working-directory: terraform-az-services/Automation_Services_SqlMI
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+        run: |
+          set -euo pipefail
+          SUB="${{ inputs.subscription_id }}"
+          PLAQUE="${{ inputs.plaque }}"
+          SETTING="${{ inputs.setting }}"
+          APP_ID="${{ inputs.application_id }}"
+          ENV="${{ inputs.env }}"
+          RG_INC="${{ inputs.resource_group_inc }}"
+
+          RG_NAME="${PLAQUE}-${SETTING}-${APP_ID}-${ENV}-RG${RG_INC}"
+          RG_ADDRESS="module.rg.azurerm_resource_group.rg"
+          EXPECTED_RG_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}"
+
+          echo "Verification RG cible : $RG_NAME"
+          RG_EXISTS=$(az group exists --name "$RG_NAME" --subscription "$SUB")
+
+          if [ "$RG_EXISTS" = "true" ]; then
+            if terraform state list | grep -qF "${RG_ADDRESS}"; then
+              echo "RG deja dans le state. Import ignore."
+            else
+              echo "Import RG dans le state..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" "$RG_ADDRESS" "$RG_ID"
+              echo "Import RG termine."
+            fi
+          else
+            echo "RG absent dans Azure. Il sera cree par Terraform."
+          fi
+
+      # ========================================================================
+      # ETAPE 10 : Plan / Apply / Destroy
+      # ========================================================================
+      - name: "10a. Terraform Destroy"
+        if: inputs.operation == 'destroy'
+        working-directory: terraform-az-services/Automation_Services_SqlMI
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+        run: |
+          set -euo pipefail
+          terraform destroy -auto-approve -var-file="${{ env.TF_VARFILE }}"
+          echo "Terraform destroy termine avec succes"
+
+      - name: "10b. Terraform Plan"
+        if: inputs.operation != 'destroy'
+        working-directory: terraform-az-services/Automation_Services_SqlMI
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+        run: |
+          set -euo pipefail
+          terraform plan \
+            -var-file="${{ env.TF_VARFILE }}" \
+            -out="${{ env.TF_PLANFILE }}"
+
+      - name: "10c. Terraform Apply"
+        if: inputs.operation == 'apply'
+        working-directory: terraform-az-services/Automation_Services_SqlMI
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+        run: |
+          set -euo pipefail
+          terraform apply -input=false -auto-approve "${{ env.TF_PLANFILE }}"
+          echo "Terraform apply termine avec succes"

@@ -1,0 +1,4 @@
+sresource_group_name  = "AP50-NPR-INFRS-NPR-RG01"
+storage_account_name = "ap50nprinfrssta01"
+container_name       = "tfstate-uat"
+key                  = "avd-hostpool-tfstate"

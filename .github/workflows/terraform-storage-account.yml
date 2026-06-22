@@ -1,0 +1,737 @@
+# ==============================================================================
+# GitHub Actions - Terraform Storage Account
+# Auth : OIDC Workload Identity Federation (zero secret)
+# Gere : Resource Group + Storage Account + Private Endpoint
+#
+# Logique PE :
+#   - storage_account_type = public  -> pas de PE
+#   - SA existe        -> import RG + SA + PE attache (pas de creation)
+#   - SA n existe pas  -> Terraform cree RG + SA + premier PE libre
+#
+# Fix state : si un ancien RG/SA/PE (increment different) est dans le state,
+# on le retire SANS detruire dans Azure, puis on importe le bon.
+# ==============================================================================
+
+name: Terraform - Storage Account
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Operation Terraform"
+        required: true
+        type: choice
+        options: [plan, apply, destroy]
+
+      subscription_id:
+        description: "Azure Subscription ID"
+        required: true
+        type: string
+
+      plaque:
+        description: "Plaque"
+        required: true
+        type: choice
+        options: [EM50, AM50, AP50, GL50]
+
+      application_id:
+        description: "Application ID"
+        required: true
+        type: string
+
+      setting:
+        description: "Setting"
+        required: true
+        type: choice
+        options: [NPR, PRD]
+
+      env:
+        description: "Environnement applicatif"
+        required: true
+        type: choice
+        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
+
+      servier_environment:
+        description: "Servier Environment"
+        required: true
+        type: choice
+        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
+
+      storage_account_type:
+        description: "Type d acces reseau"
+        required: true
+        type: choice
+        options: [public, private]
+
+      storage_account_kind:
+        description: "Kind du Storage Account"
+        required: true
+        type: choice
+        options: [StorageV2, BlobStorage, FileStorage]
+
+      storage_account_replication_type:
+        description: "Type de replication (FileStorage : LRS ou ZRS uniquement)"
+        required: true
+        type: choice
+        options: [LRS, ZRS, GRS]
+
+      storage_account_access_tier:
+        description: "Tier d acces (ignore pour FileStorage)"
+        required: true
+        type: choice
+        options: [Hot, Cool]
+
+      sftp_enabled:
+        description: "Activer SFTP (StorageV2 uniquement)"
+        required: false
+        type: choice
+        options: ["false", "true"]
+        default: "false"
+
+      zoning:
+        description: "Zoning reseau (requis si storage_account_type = private)"
+        required: false
+        type: choice
+        options:
+          - ""
+          - prod-critical
+          - prod-standard
+          - prod-internet
+          - nonprod-critical
+          - nonprod-standard
+          - nonprod-internet
+        default: ""
+
+      resource_group_inc:
+        description: "Increment Resource Group"
+        required: true
+        default: "01"
+        type: string
+
+      storage_account_inc:
+        description: "Increment Storage Account"
+        required: true
+        default: "01"
+        type: string
+
+      endpoint_resource_type:
+        description: "Sous-ressource Private Endpoint (auto-corrige selon kind)"
+        required: false
+        type: choice
+        options: [blob, file]
+        default: blob
+
+      location:
+        description: "Azure Region"
+        required: true
+        default: "France Central"
+        type: string
+
+      terraform_version:
+        description: "Version Terraform"
+        required: false
+        default: "1.7.5"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    name: "Terraform ${{ inputs.operation }} - ${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }}"
+    runs-on: [Automation_linux_pool]
+
+    env:
+      TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-${{ inputs.storage_account_type }}-storageaccount-${{ inputs.storage_account_inc }}"
+      TF_VARFILE:   "vars/${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-${{ inputs.storage_account_type }}-storageaccount-${{ inputs.storage_account_inc }}.tfvars"
+      TF_PLANFILE:  "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-${{ inputs.storage_account_type }}-storageaccount-${{ inputs.storage_account_inc }}.tfplan"
+
+      TF_VAR_PLAQUE:                      "${{ inputs.plaque }}"
+      TF_VAR_ENV:                         "${{ inputs.env }}"
+      TF_VAR_SETTING:                     "${{ inputs.setting }}"
+      TF_VAR_APPLICATION_ID:              "${{ inputs.application_id }}"
+      TF_VAR_RESOURCE_GROUP_INC:          "${{ inputs.resource_group_inc }}"
+      TF_VAR_STORAGE_ACCOUNT_INC:         "${{ inputs.storage_account_inc }}"
+      TF_VAR_STORAGE_ACCOUNT_TYPE:        "${{ inputs.storage_account_type }}"
+      TF_VAR_STORAGE_ACCOUNT_KIND:        "${{ inputs.storage_account_kind }}"
+      TF_VAR_STORAGE_ACCOUNT_ACCESS_TIER: "${{ inputs.storage_account_access_tier }}"
+      TF_VAR_SA_EXISTING_RESOURCE_GROUP:  ""
+      # TF_VAR_PE_INC -> injecte via GITHUB_ENV a l etape 11
+
+    steps:
+
+      # ========================================================================
+      # ETAPE 0 : Garde-fous
+      # ========================================================================
+      - name: "BLOCAGE - Zoning requis si storage_account_type = private"
+        if: inputs.storage_account_type == 'private' && inputs.zoning == ''
+        run: |
+          echo "::error::Le parametre zoning est requis quand storage_account_type = private"
+          exit 1
+
+      - name: "Clean git config"
+        run: |
+          git config --global --unset-all http.https://github.com/.extraheader || true
+
+      # ========================================================================
+      # ETAPE 1 : Token GitHub App
+      # ========================================================================
+      - name: "1. Generer le token GitHub App"
+        id: app-token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+
+      # ========================================================================
+      # ETAPE 2 : Checkout repos
+      # ========================================================================
+      - name: "2. Checkout terraform-az-services"
+        uses: actions/checkout@v4
+        with:
+          repository: servier-github/terraform-az-services
+          ref: ${{ github.ref_name }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: terraform-az-services
+          persist-credentials: false
+
+      # ========================================================================
+      # ETAPE 3 : Resolution secret + backend + hub subscription
+      # ========================================================================
+      - name: "3. Resolution secret Client ID + backend"
+        id: routing
+        run: |
+          set -euo pipefail
+
+          SETTING="${{ inputs.setting }}"
+          PLAQUE="${{ inputs.plaque }}"
+          ENV="${{ inputs.env }}"
+          SUBSCRIPTION_ID="${{ inputs.subscription_id }}"
+
+          MG_GL_SUBS=(
+            "a96e6018-b2ce-46e9-a92b-50bf64b1e6cb"
+            "fc23aeec-0740-4b1e-a80b-510195d94869"
+            "3bc8f7fd-5621-4832-9147-01ed59c7fe2e"
+            "7553fb7b-0db0-49e5-8227-d87872c206fd"
+          )
+
+          IS_MG_GL="false"
+          for sub in "${MG_GL_SUBS[@]}"; do
+            if [ "$SUBSCRIPTION_ID" = "$sub" ]; then
+              IS_MG_GL="true"
+              break
+            fi
+          done
+
+          if [ "$IS_MG_GL" = "true" ]; then
+            SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_MG_GL_PRD"
+            BACKEND_FILE="backends/${PLAQUE}-HUB.tfbackend"
+          elif [ "$SETTING" = "PRD" ]; then
+            SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_PRD"
+            BACKEND_FILE="backends/${PLAQUE}-PRD.tfbackend"
+          else
+            SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_NPR"
+            BACKEND_FILE="backends/${PLAQUE}-${ENV}.tfbackend"
+          fi
+
+          if [ "${{ inputs.storage_account_type }}" = "private" ]; then
+            HUB_SUB_ID="a96e6018-b2ce-46e9-a92b-50bf64b1e6cb"
+          else
+            HUB_SUB_ID="${SUBSCRIPTION_ID}"
+          fi
+
+          echo "secret_name=$SECRET_NAME"        >> "$GITHUB_OUTPUT"
+          echo "backend_file=$BACKEND_FILE"      >> "$GITHUB_OUTPUT"
+          echo "hub_subscription_id=$HUB_SUB_ID" >> "$GITHUB_OUTPUT"
+          echo "Secret name      : $SECRET_NAME"
+          echo "Backend file     : $BACKEND_FILE"
+          echo "Hub subscription : $HUB_SUB_ID"
+
+      # ========================================================================
+      # ETAPE 4 : Azure Login (OIDC)
+      # ========================================================================
+      - name: "4. Azure Login (OIDC)"
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets[steps.routing.outputs.secret_name] }}
+          tenant-id:       ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ inputs.subscription_id }}
+
+      # ========================================================================
+      # ETAPE 5 : Install Terraform
+      # ========================================================================
+      - name: "5. Install Terraform ${{ inputs.terraform_version }}"
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+
+      # ========================================================================
+      # ETAPE 6 : Validation backend
+      # ========================================================================
+      - name: "6. Validation backend"
+        working-directory: terraform-az-services/Automation_Services_Storageaccount
+        run: |
+          set -euo pipefail
+          BACKEND_FILE="${{ steps.routing.outputs.backend_file }}"
+          if [ ! -f "$BACKEND_FILE" ]; then
+            echo "::error::Fichier backend introuvable : $BACKEND_FILE"
+            ls backends/ || true
+            exit 1
+          fi
+          echo "Backend OK : $BACKEND_FILE"
+
+      # ========================================================================
+      # ETAPE 7 : Calcul variables derivees
+      # ========================================================================
+      - name: "7. Calcul variables derivees"
+        id: derived
+        run: |
+          set -euo pipefail
+
+          KIND="${{ inputs.storage_account_kind }}"
+          REPLICATION="${{ inputs.storage_account_replication_type }}"
+          SFTP="${{ inputs.sftp_enabled }}"
+          ENDPOINT_RESOURCE_TYPE="${{ inputs.endpoint_resource_type }}"
+
+          if [ "$KIND" = "FileStorage" ]; then
+            TIER="Premium"
+          else
+            TIER="Standard"
+          fi
+
+          if [ "$KIND" = "FileStorage" ]; then
+            if [ "$REPLICATION" != "LRS" ] && [ "$REPLICATION" != "ZRS" ]; then
+              echo "::warning::FileStorage ne supporte que LRS/ZRS, replication forcee a LRS"
+              REPLICATION="LRS"
+            fi
+            ENDPOINT_RESOURCE_TYPE="file"
+            SFTP="false"
+          fi
+
+          if [ "$KIND" = "BlobStorage" ]; then
+            SFTP="false"
+            if [ "$ENDPOINT_RESOURCE_TYPE" != "blob" ]; then
+              echo "::warning::BlobStorage impose endpoint_resource_type=blob, correction"
+              ENDPOINT_RESOURCE_TYPE="blob"
+            fi
+          fi
+
+          echo "storage_account_tier=$TIER"                     >> "$GITHUB_OUTPUT"
+          echo "storage_account_replication=$REPLICATION"       >> "$GITHUB_OUTPUT"
+          echo "sftp_enabled=$SFTP"                             >> "$GITHUB_OUTPUT"
+          echo "endpoint_resource_type=$ENDPOINT_RESOURCE_TYPE" >> "$GITHUB_OUTPUT"
+
+          echo "--- Valeurs effectives ---"
+          echo "Kind                   : $KIND"
+          echo "Tier                   : $TIER"
+          echo "Replication            : $REPLICATION"
+          echo "SFTP                   : $SFTP"
+          echo "Endpoint resource type : $ENDPOINT_RESOURCE_TYPE"
+
+      # ========================================================================
+      # ETAPE 8 : Generation tfvars
+      # ========================================================================
+      - name: "8. Generation tfvars"
+        working-directory: terraform-az-services/Automation_Services_Storageaccount
+        run: |
+          set -euo pipefail
+          mkdir -p vars
+
+          SERVIER_ENV="${{ inputs.setting == 'PRD' && 'PRD' || inputs.servier_environment }}"
+          SUBSCRIPTION_NAME=$(az account show \
+            --subscription "${{ inputs.subscription_id }}" \
+            --query "name" -o tsv)
+          ZONING="${{ inputs.zoning }}"
+
+          cat > "${{ env.TF_VARFILE }}" <<EOF
+          location            = "${{ inputs.location }}"
+          servier_environment = "${SERVIER_ENV}"
+          EOF
+
+          if [ "${{ inputs.storage_account_type }}" = "private" ]; then
+            case "$SUBSCRIPTION_NAME" in
+              *"EM50-PRD-MUT"*)
+                case "$ZONING" in
+                  "prod-critical")
+                    DELEGATED_SUBNET="EM50-PRD-MUT-VN02-SN001"; VNET="EM50-PRD-MUT-VN02"; VNET_RG="EM50-PRD-MUT-RG002" ;;
+                  "prod-standard")
+                    DELEGATED_SUBNET="EM50-PRD-MUT-VN01-SN001"; VNET="EM50-PRD-MUT-VN01"; VNET_RG="EM50-PRD-MUT-RG001" ;;
+                  "prod-internet")
+                    DELEGATED_SUBNET="EM50-PRD-MUT-VN03-SN001"; VNET="EM50-PRD-MUT-VN03"; VNET_RG="EM50-PRD-MUT-RG003" ;;
+                  *) echo "::error::Zoning '$ZONING' non supporte"; exit 1 ;;
+                esac ;;
+              *"AM50-PRD-MUT"*)
+                case "$ZONING" in
+                  "prod-critical")
+                    DELEGATED_SUBNET="AM50-PRD-MUT-VN02-SN001"; VNET="AM50-PRD-MUT-VN02"; VNET_RG="AM50-PRD-MUT-RG002" ;;
+                  "prod-standard")
+                    DELEGATED_SUBNET="AM50-PRD-MUT-VN01-SN004"; VNET="AM50-PRD-MUT-VN01"; VNET_RG="AM50-PRD-MUT-RG001" ;;
+                  "prod-internet")
+                    DELEGATED_SUBNET="AM50-PRD-MUT-VN03-SN001"; VNET="AM50-PRD-MUT-VN03"; VNET_RG="AM50-PRD-MUT-RG003" ;;
+                  *) echo "::error::Zoning '$ZONING' non supporte"; exit 1 ;;
+                esac ;;
+              *"AP50-PRD-MUT"*)
+                case "$ZONING" in
+                  "prod-critical")
+                    DELEGATED_SUBNET="AP50-PRD-MUT-VN02-SN001"; VNET="AP50-PRD-MUT-VN02"; VNET_RG="AP50-PRD-MUT-RG002" ;;
+                  "prod-standard")
+                    DELEGATED_SUBNET="AP50-PRD-MUT-VN01-SN001"; VNET="AP50-PRD-MUT-VN01"; VNET_RG="AP50-PRD-MUT-RG001" ;;
+                  "prod-internet")
+                    DELEGATED_SUBNET="AP50-PRD-MUT-VN03-SN001"; VNET="AP50-PRD-MUT-VN03"; VNET_RG="AP50-PRD-MUT-RG003" ;;
+                  *) echo "::error::Zoning '$ZONING' non supporte"; exit 1 ;;
+                esac ;;
+              *"EM50-NPR-MUT"*)
+                case "$ZONING" in
+                  "nonprod-critical")
+                    DELEGATED_SUBNET="EM50-DEV-MUT-VN02-SN001"; VNET="EM50-DEV-MUT-VN02"; VNET_RG="EM50-DEV-MUT-RG002" ;;
+                  "nonprod-standard")
+                    DELEGATED_SUBNET="EM50-DEV-MUT-VN01-SN001"; VNET="EM50-DEV-MUT-VN01"; VNET_RG="EM50-DEV-MUT-RG001" ;;
+                  "nonprod-internet")
+                    DELEGATED_SUBNET="EM50-DEV-MUT-VN03-SN001"; VNET="EM50-DEV-MUT-VN03"; VNET_RG="EM50-DEV-MUT-RG003" ;;
+                  *) echo "::error::Zoning '$ZONING' non supporte"; exit 1 ;;
+                esac ;;
+              *"AM50-NPR-MUT"*)
+                case "$ZONING" in
+                  "nonprod-critical")
+                    DELEGATED_SUBNET="AM50-DEV-MUT-VN02-SN001"; VNET="AM50-DEV-MUT-VN02"; VNET_RG="AM50-DEV-MUT-RG002" ;;
+                  "nonprod-standard")
+                    DELEGATED_SUBNET="AM50-DEV-MUT-VN01-SN001"; VNET="AM50-DEV-MUT-VN01"; VNET_RG="AM50-DEV-MUT-RG001" ;;
+                  "nonprod-internet")
+                    DELEGATED_SUBNET="AM50-DEV-MUT-VN03-SN001"; VNET="AM50-DEV-MUT-VN03"; VNET_RG="AM50-DEV-MUT-RG003" ;;
+                  *) echo "::error::Zoning '$ZONING' non supporte"; exit 1 ;;
+                esac ;;
+              *"AP50-NPR-MUT"*)
+                case "$ZONING" in
+                  "nonprod-critical")
+                    DELEGATED_SUBNET="AP50-DEV-MUT-VN02-SN001"; VNET="AP50-DEV-MUT-VN02"; VNET_RG="AP50-DEV-MUT-RG002" ;;
+                  "nonprod-standard")
+                    DELEGATED_SUBNET="AP50-DEV-MUT-VN01-SN001"; VNET="AP50-DEV-MUT-VN01"; VNET_RG="AP50-DEV-MUT-RG001" ;;
+                  "nonprod-internet")
+                    DELEGATED_SUBNET="AP50-DEV-MUT-VN03-SN001"; VNET="AP50-DEV-MUT-VN03"; VNET_RG="AP50-DEV-MUT-RG003" ;;
+                  *) echo "::error::Zoning '$ZONING' non supporte"; exit 1 ;;
+                esac ;;
+              *) echo "::error::Subscription non reconnue : $SUBSCRIPTION_NAME"; exit 1 ;;
+            esac
+
+            cat >> "${{ env.TF_VARFILE }}" <<EOF
+          delegated_subnet_name   = "${DELEGATED_SUBNET}"
+          vnet_name               = "${VNET}"
+          virtual_network_rg_name = "${VNET_RG}"
+          EOF
+            echo "Reseau resolu : $DELEGATED_SUBNET / $VNET / $VNET_RG"
+          fi
+
+          echo "tfvars genere :"
+          cat "${{ env.TF_VARFILE }}"
+
+      # ========================================================================
+      # ETAPE 8b : Break state lock + token modules
+      # ========================================================================
+      - name: "8b. Break state lock si existant"
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+        run: |
+          BACKEND_FILE="terraform-az-services/Automation_Services_Storageaccount/${{ steps.routing.outputs.backend_file }}"
+          SA=$(grep -E '^storage_account_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          CONTAINER=$(grep -E '^container_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          BLOB="sa-tfstateenv:${{ env.TF_WORKSPACE }}"
+          az storage blob lease break \
+            --account-name "$SA" \
+            --container-name "$CONTAINER" \
+            --blob-name "$BLOB" \
+            --auth-mode login 2>/dev/null \
+            && echo "Lock libere" || echo "Pas de lock actif"
+
+      - name: "8c. Get token for Terraform modules"
+        id: get_token_tf
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+          revoke: false
+
+      # ========================================================================
+      # ETAPE 9 : Terraform Init + Workspace
+      # ========================================================================
+      - name: "9. Terraform Init + Workspace"
+        working-directory: terraform-az-services/Automation_Services_Storageaccount
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+          GITHUB_TOKEN:        ${{ steps.get_token_tf.outputs.token }}
+        run: |
+          set -euo pipefail
+          echo "machine github.com login x-access-token password ${GITHUB_TOKEN}" > ~/.netrc
+          chmod 600 ~/.netrc
+          unset TF_WORKSPACE
+          terraform init -reconfigure -backend-config="${{ steps.routing.outputs.backend_file }}"
+          terraform workspace new "${{ env.TF_WORKSPACE }}" 2>/dev/null || \
+            terraform workspace select "${{ env.TF_WORKSPACE }}"
+          rm -f ~/.netrc
+
+      # ========================================================================
+      # ETAPE 10 : Calcul noms
+      # ========================================================================
+      - name: "10. Calcul noms ressources"
+        id: names
+        run: |
+          set -euo pipefail
+          RG=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-RG${{ inputs.resource_group_inc }}" | tr '[:lower:]' '[:upper:]')
+          SA=$(echo "${{ inputs.plaque }}${{ inputs.env }}${{ inputs.application_id }}sta${{ inputs.storage_account_inc }}" | tr '[:upper:]' '[:lower:]')
+          echo "rg=$RG" >> "$GITHUB_OUTPUT"
+          echo "sa=$SA" >> "$GITHUB_OUTPUT"
+          echo "RG=$RG | SA=$SA"
+
+      # ========================================================================
+      # ETAPE 11 : Import ressources existantes + resolution PE
+      #
+      # Fix state : si un ancien RG/SA/PE est dans le state avec un ID different
+      # du cible, on le retire SANS detruire dans Azure, puis on importe le bon.
+      # ========================================================================
+      - name: "11. Import ressources existantes + resolution PE"
+        working-directory: terraform-az-services/Automation_Services_Storageaccount
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+          TF_VAR_HUB_SUBSCRIPTION_ID:              ${{ steps.routing.outputs.hub_subscription_id }}
+          TF_VAR_STORAGE_ACCOUNT_TIER:             ${{ steps.derived.outputs.storage_account_tier }}
+          TF_VAR_STORAGE_ACCOUNT_REPLICATION_TYPE: ${{ steps.derived.outputs.storage_account_replication }}
+          TF_VAR_SFTP_ENABLED:                     ${{ steps.derived.outputs.sftp_enabled }}
+          TF_VAR_PRIV_ENDPOINT_RESOURCE_TYPE:      ${{ steps.derived.outputs.endpoint_resource_type }}
+        run: |
+          set -euo pipefail
+          SUB="${{ inputs.subscription_id }}"
+          RG_NAME="${{ steps.names.outputs.rg }}"
+          SA_NAME="${{ steps.names.outputs.sa }}"
+          PLAQUE="${{ inputs.plaque }}"
+          ENV="${{ inputs.env }}"
+          APP_ID="${{ inputs.application_id }}"
+          SA_TYPE="${{ inputs.storage_account_type }}"
+          ENDPOINT_TYPE="${{ steps.derived.outputs.endpoint_resource_type }}"
+          START_INC="${{ inputs.storage_account_inc }}"
+
+          RG_ADDRESS="module.rg.azurerm_resource_group.rg"
+          SA_ADDRESS="module.storage_account.azurerm_storage_account.storage_account"
+          PE_ADDRESS="module.private_endpoint[0].azurerm_private_endpoint.endpoint"
+          EXPECTED_RG_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}"
+
+          # ── Fonction nettoyage state ──────────────────────────────────────────
+          clean_state_if_different() {
+            local ADDRESS="$1"
+            local EXPECTED_ID="$2"
+            local LABEL="$3"
+
+            if terraform state list | grep -qF "${ADDRESS}"; then
+              STATE_ID=$(terraform state show "${ADDRESS}" 2>/dev/null \
+                | grep "^ *id " | head -1 | sed -E 's/.*= *"([^"]+)".*/\1/' || echo "")
+              if [ -n "$STATE_ID" ] && [ "$STATE_ID" != "$EXPECTED_ID" ]; then
+                echo "$LABEL dans le state ($STATE_ID) different de la cible -> nettoyage state"
+                terraform state rm "${ADDRESS}" || true
+                return 0  # nettoyage effectue
+              fi
+              return 1  # deja correct dans le state
+            fi
+            return 0  # pas dans le state
+          }
+
+          # ── Import Resource Group ─────────────────────────────────────────────
+          echo "Verification RG cible : $RG_NAME"
+          RG_EXISTS=$(az group exists --name "$RG_NAME" --subscription "$SUB")
+
+          if [ "$RG_EXISTS" = "true" ]; then
+            if terraform state list | grep -qF "${RG_ADDRESS}"; then
+              STATE_RG_ID=$(terraform state show "${RG_ADDRESS}" 2>/dev/null \
+                | grep "^ *id " | head -1 | sed -E 's/.*= *"([^"]+)".*/\1/' || echo "")
+              if [ -n "$STATE_RG_ID" ] && [ "$STATE_RG_ID" != "$EXPECTED_RG_ID" ]; then
+                echo "RG dans le state different du RG cible -> nettoyage state + import"
+                terraform state rm "${RG_ADDRESS}" || true
+                terraform state rm "${SA_ADDRESS}" || true
+                terraform state rm "${PE_ADDRESS}" || true
+                terraform import -var-file="${{ env.TF_VARFILE }}" "${RG_ADDRESS}" "${EXPECTED_RG_ID}"
+              else
+                echo "RG deja dans le state avec le bon ID."
+              fi
+            else
+              echo "Import RG..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" "${RG_ADDRESS}" "${EXPECTED_RG_ID}"
+            fi
+          else
+            if terraform state list | grep -qF "${RG_ADDRESS}"; then
+              echo "RG absent dans Azure mais present dans le state -> nettoyage"
+              terraform state rm "${RG_ADDRESS}" || true
+              terraform state rm "${SA_ADDRESS}" || true
+              terraform state rm "${PE_ADDRESS}" || true
+            fi
+            echo "RG absent — sera cree par Terraform."
+          fi
+
+          # ── Verification SA ───────────────────────────────────────────────────
+          SA_REAL_ID=$(az storage account show \
+            --name "$SA_NAME" \
+            --subscription "$SUB" \
+            --query "id" -o tsv 2>/dev/null || echo "")
+
+          if [ -n "$SA_REAL_ID" ]; then
+            # ============ CAS 1 : SA EXISTE ============
+            SA_REAL_RG=$(az storage account show \
+              --name "$SA_NAME" \
+              --subscription "$SUB" \
+              --query "resourceGroup" -o tsv)
+            echo "SA existe : $SA_REAL_ID (RG: $SA_REAL_RG)"
+
+            if [ "$SA_REAL_RG" != "$RG_NAME" ]; then
+              echo "TF_VAR_SA_EXISTING_RESOURCE_GROUP=$SA_REAL_RG" >> "$GITHUB_ENV"
+            fi
+
+            # Import SA si absent ou si ID different
+            if terraform state list | grep -qF "${SA_ADDRESS}"; then
+              STATE_SA_ID=$(terraform state show "${SA_ADDRESS}" 2>/dev/null \
+                | grep "^ *id " | head -1 | sed -E 's/.*= *"([^"]+)".*/\1/' || echo "")
+              if [ -n "$STATE_SA_ID" ] && [ "$STATE_SA_ID" != "$SA_REAL_ID" ]; then
+                echo "SA dans le state different du SA cible -> nettoyage state + import"
+                terraform state rm "${SA_ADDRESS}" || true
+                terraform state rm "${PE_ADDRESS}" || true
+                terraform import -var-file="${{ env.TF_VARFILE }}" "${SA_ADDRESS}" "$SA_REAL_ID"
+              else
+                echo "SA deja dans le state avec le bon ID."
+              fi
+            else
+              echo "Import SA..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" "${SA_ADDRESS}" "$SA_REAL_ID"
+            fi
+
+            # Si private, importer le PE attache au SA
+            if [ "$SA_TYPE" = "private" ]; then
+              echo "Recherche du PE attache au SA (sous-ressource: $ENDPOINT_TYPE)..."
+              ATTACHED_PE=$(az network private-endpoint list \
+                --resource-group "$SA_REAL_RG" \
+                --subscription "$SUB" \
+                --query "[?privateLinkServiceConnections[0].privateLinkServiceId=='${SA_REAL_ID}' && contains(privateLinkServiceConnections[0].groupIds, '${ENDPOINT_TYPE}')].name" \
+                -o tsv 2>/dev/null | head -1 || echo "")
+
+              if [ -n "$ATTACHED_PE" ]; then
+                echo "PE trouve : $ATTACHED_PE"
+                PE_INC="${ATTACHED_PE##*PE}"
+                echo "TF_VAR_PE_INC=${PE_INC}" >> "$GITHUB_ENV"
+
+                PE_FULL_ID="/subscriptions/${SUB}/resourceGroups/${SA_REAL_RG}/providers/Microsoft.Network/privateEndpoints/${ATTACHED_PE}"
+
+                if terraform state list | grep -qF "${PE_ADDRESS}"; then
+                  STATE_PE_ID=$(terraform state show "${PE_ADDRESS}" 2>/dev/null \
+                    | grep "^ *id " | head -1 | sed -E 's/.*= *"([^"]+)".*/\1/' || echo "")
+                  if [ -n "$STATE_PE_ID" ] && [ "$STATE_PE_ID" != "$PE_FULL_ID" ]; then
+                    echo "PE dans le state different du PE cible -> nettoyage + import"
+                    terraform state rm "${PE_ADDRESS}" || true
+                    terraform import -var-file="${{ env.TF_VARFILE }}" "${PE_ADDRESS}" "$PE_FULL_ID"
+                  else
+                    echo "PE deja dans le state avec le bon ID."
+                  fi
+                else
+                  echo "Import PE..."
+                  terraform import -var-file="${{ env.TF_VARFILE }}" "${PE_ADDRESS}" "$PE_FULL_ID"
+                fi
+              else
+                echo "::warning::SA existe mais aucun PE attache trouve"
+                echo "TF_VAR_PE_INC=${START_INC}" >> "$GITHUB_ENV"
+              fi
+            fi
+
+          else
+            # ============ CAS 2 : SA N EXISTE PAS ============
+            echo "SA absent — sera cree par Terraform."
+
+            if [ "$SA_TYPE" = "private" ]; then
+              echo "Recherche du premier PE libre..."
+              INC=$(( 10#$START_INC ))
+              PE_RESOLVED_NAME=""
+              PE_RESOLVED_INC=""
+
+              while [ "$INC" -le 99 ]; do
+                INC_PAD=$(printf "%02d" "$INC")
+                CANDIDATE="${PLAQUE}-${ENV}-${APP_ID}-PE${INC_PAD}"
+                EXISTS=$(az network private-endpoint show \
+                  --name "$CANDIDATE" \
+                  --resource-group "$RG_NAME" \
+                  --subscription "$SUB" \
+                  --query "id" -o tsv 2>/dev/null || echo "")
+                if [ -z "$EXISTS" ]; then
+                  PE_RESOLVED_NAME="$CANDIDATE"
+                  PE_RESOLVED_INC="$INC_PAD"
+                  break
+                fi
+                echo "PE $CANDIDATE existe -> increment"
+                INC=$(( INC + 1 ))
+              done
+
+              if [ -z "$PE_RESOLVED_NAME" ]; then
+                echo "::error::Aucun slot PE disponible jusqu a PE99"
+                exit 1
+              fi
+
+              echo "TF_VAR_PE_INC=${PE_RESOLVED_INC}" >> "$GITHUB_ENV"
+              echo "PE sera cree : $PE_RESOLVED_NAME"
+            fi
+          fi
+
+      # ========================================================================
+      # ETAPE 12 : Plan / Apply / Destroy
+      # ========================================================================
+      - name: "12a. Terraform Plan"
+        if: inputs.operation != 'destroy'
+        working-directory: terraform-az-services/Automation_Services_Storageaccount
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+          TF_VAR_HUB_SUBSCRIPTION_ID:              ${{ steps.routing.outputs.hub_subscription_id }}
+          TF_VAR_STORAGE_ACCOUNT_TIER:             ${{ steps.derived.outputs.storage_account_tier }}
+          TF_VAR_STORAGE_ACCOUNT_REPLICATION_TYPE: ${{ steps.derived.outputs.storage_account_replication }}
+          TF_VAR_SFTP_ENABLED:                     ${{ steps.derived.outputs.sftp_enabled }}
+          TF_VAR_PRIV_ENDPOINT_RESOURCE_TYPE:      ${{ steps.derived.outputs.endpoint_resource_type }}
+        run: terraform plan -var-file="${{ env.TF_VARFILE }}" -out="${{ env.TF_PLANFILE }}"
+
+      - name: "12b. Terraform Apply"
+        if: inputs.operation == 'apply'
+        working-directory: terraform-az-services/Automation_Services_Storageaccount
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+          TF_VAR_HUB_SUBSCRIPTION_ID:              ${{ steps.routing.outputs.hub_subscription_id }}
+          TF_VAR_STORAGE_ACCOUNT_TIER:             ${{ steps.derived.outputs.storage_account_tier }}
+          TF_VAR_STORAGE_ACCOUNT_REPLICATION_TYPE: ${{ steps.derived.outputs.storage_account_replication }}
+          TF_VAR_SFTP_ENABLED:                     ${{ steps.derived.outputs.sftp_enabled }}
+          TF_VAR_PRIV_ENDPOINT_RESOURCE_TYPE:      ${{ steps.derived.outputs.endpoint_resource_type }}
+        run: terraform apply -input=false -auto-approve "${{ env.TF_PLANFILE }}"
+
+      - name: "12c. Terraform Destroy"
+        if: inputs.operation == 'destroy'
+        working-directory: terraform-az-services/Automation_Services_Storageaccount
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret_name] }}
+          TF_VAR_HUB_SUBSCRIPTION_ID:              ${{ steps.routing.outputs.hub_subscription_id }}
+          TF_VAR_STORAGE_ACCOUNT_TIER:             ${{ steps.derived.outputs.storage_account_tier }}
+          TF_VAR_STORAGE_ACCOUNT_REPLICATION_TYPE: ${{ steps.derived.outputs.storage_account_replication }}
+          TF_VAR_SFTP_ENABLED:                     ${{ steps.derived.outputs.sftp_enabled }}
+          TF_VAR_PRIV_ENDPOINT_RESOURCE_TYPE:      ${{ steps.derived.outputs.endpoint_resource_type }}
+        run: |
+          terraform destroy -auto-approve \
+            -var-file="${{ env.TF_VARFILE }}" \
+            -target=module.private_endpoint \
+            -target=module.storage_account
+

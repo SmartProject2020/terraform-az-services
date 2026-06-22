@@ -1,0 +1,39 @@
+# Copier ce fichier en terraform.tfvars et adapter les valeurs.
+# Ne jamais committer terraform.tfvars (il est dans .gitignore).
+
+# Domaine à protéger
+domain = "contoso.com"
+
+# Région Azure
+location = "westeurope"
+
+# Environnement
+environment = "prod"
+
+# Mode de la stratégie : commencer par "testing", passer à "enforce" après validation
+policy_mode = "testing"
+
+# ID unique de la stratégie (format UTC : YYYYMMDDhh0000)
+# Générer avec : bash scripts/generate-policy-id.sh
+# Mettre à jour à chaque changement de stratégie MTA-STS
+policy_id = "20260424120000"
+
+# Hôtes MX (Exchange Online par défaut)
+mx_hosts = ["*.mail.protection.outlook.com"]
+
+# Durée de cache en secondes (604800 = 1 semaine)
+max_age = 604800
+
+# Passer à true APRÈS avoir créé le CNAME DNS
+custom_domain_configured = false
+
+# ─── DNS Azure (optionnel) ────────────────────────────────────────────────────
+# Renseigner seulement si votre DNS est géré par Azure DNS
+# azure_dns_zone_resource_group = "rg-dns"
+# azure_dns_zone_name           = "contoso.com"
+
+# Tags communs
+tags = {
+  Project    = "MTA-STS"
+  CostCenter = "IT-Security"
+}

@@ -1,0 +1,235 @@
+# ==============================================================================
+# GitHub Actions - FileShare AD Join (Join-AzStorageAccount)
+# Auth : OIDC direct via FederatedToken - zero secret, zero az cli
+# Requiert : self-hosted runner joint au domaine AD (fr1.grs.net)
+# Declenche par : terraform-storage-account.yml apres l'apply (FileStorage uniquement)
+# ==============================================================================
+
+name: FileShare - Register AD
+
+on:
+  workflow_dispatch:
+    inputs:
+      storage_account_name:
+        description: "Nom du Storage Account"
+        required: true
+        type: string
+
+      resource_group_name:
+        description: "Nom du Resource Group"
+        required: true
+        type: string
+
+      subscription_id:
+        description: "Azure Subscription ID"
+        required: true
+        type: string
+
+      plaque:
+        description: "Plaque"
+        required: true
+        type: choice
+        options: [EM50, AM50, AP50, GL50]
+
+      env:
+        description: "Environnement applicatif"
+        required: true
+        type: choice
+        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
+
+      application_id:
+        description: "Application ID"
+        required: true
+        type: string
+
+      storage_account_inc:
+        description: "Increment Storage Account"
+        required: false
+        default: "01"
+        type: string
+
+      setting:
+        description: "Setting (NPR ou PRD)"
+        required: true
+        type: choice
+        options: [NPR, PRD]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  register:
+    name: "AD Join - ${{ inputs.storage_account_name }}"
+    runs-on: [Automation_win_pool]
+
+    steps:
+
+      # ========================================================================
+      # ETAPE 0 - Token GitHub App
+      # ========================================================================
+      - name: "0. Token GitHub App"
+        id: app-token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+
+      # ========================================================================
+      # ETAPE 1 - Checkout
+      # ========================================================================
+      - name: "1. Checkout terraform-az-services"
+        uses: actions/checkout@v4
+        with:
+          repository: servier-github/terraform-az-services
+          ref: ${{ github.ref_name }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: terraform-az-services
+
+      # ========================================================================
+      # ETAPE 2 - Routing secret OIDC
+      # ========================================================================
+      - name: "2. Routing secret OIDC"
+        id: routing
+        shell: pwsh
+        run: |
+          $SUB     = "${{ inputs.subscription_id }}"
+          $PLAQUE  = "${{ inputs.plaque }}"
+          $SETTING = "${{ inputs.setting }}"
+
+          $MG_GL_SUBS = @(
+            "a96e6018-b2ce-46e9-a92b-50bf64b1e6cb",
+            "fc23aeec-0740-4b1e-a80b-510195d94869",
+            "3bc8f7fd-5621-4832-9147-01ed59c7fe2e",
+            "7553fb7b-0db0-49e5-8227-d87872c206fd"
+          )
+
+          $IS_MG_GL = $MG_GL_SUBS -contains $SUB
+
+          if ($IS_MG_GL) {
+            $SECRET_NAME = "AZURE_CLIENT_ID_SC_OIDC_MG_GL_PRD"
+          } elseif ($SETTING -eq "PRD") {
+            $SECRET_NAME = "AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_PRD"
+          } else {
+            $SECRET_NAME = "AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_NPR"
+          }
+
+          echo "secret=$SECRET_NAME" >> $env:GITHUB_OUTPUT
+          Write-Host "Secret name : $SECRET_NAME"
+
+      # ========================================================================
+      # ETAPE 3 - Verification domaine AD
+      # ========================================================================
+      - name: "3. Verification domaine AD"
+        shell: pwsh
+        run: |
+          $domain = (Get-WmiObject Win32_ComputerSystem).Domain
+          if ($domain -eq "WORKGROUP") {
+            Write-Error "La machine n'est pas jointe a un domaine. Execution impossible."
+            exit 1
+          }
+          Write-Host "Machine jointe au domaine : $domain"
+
+      # ========================================================================
+      # ETAPE 4 - Installation modules AzFilesHybrid
+      # ========================================================================
+      - name: "4. Installation AzFilesHybrid"
+        shell: pwsh
+        working-directory: terraform-az-services/Automation_Services_Fileshare/scripts_ps1
+        run: |
+          if (-not (Test-Path .\CopyToPSPath.ps1)) {
+            Write-Error "CopyToPSPath.ps1 introuvable"
+            exit 1
+          }
+
+          Write-Host "Execution de CopyToPSPath.ps1..."
+          .\CopyToPSPath.ps1
+
+          $modulePath = Get-Module -ListAvailable -Name AzFilesHybrid | Select-Object -ExpandProperty ModuleBase
+          if (-not $modulePath) {
+            Write-Error "Module AzFilesHybrid introuvable apres installation"
+            exit 1
+          }
+          Write-Host "Module AzFilesHybrid disponible : $modulePath"
+
+      # ========================================================================
+      # ETAPE 5 - Authentification OIDC directe + AD Join
+      #
+      # Modules importes :
+      #   - Az.Accounts  5.1.1 (requis par AzFilesHybrid)
+      #   - Az.Resources 6.6.0 (requis par Join-AzStorageAccount via Get-AzResourceGroup)
+      #   - AzFilesHybrid 0.3.2.0 (contient Join-AzStorageAccount)
+      #
+      # Az.Storage (9.1.0) et Az.Network exclus - non necessaires pour le AD join
+      #
+      # WAM desactive : evite l'interception browser en session non-interactive
+      # (NT AUTHORITY\SYSTEM sans interface graphique)
+      # ========================================================================
+      - name: "5. AD Join - Join-AzStorageAccount"
+        shell: pwsh
+        env:
+          CLIENT_ID: ${{ secrets[steps.routing.outputs.secret] }}
+          TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          SUB_ID:    ${{ inputs.subscription_id }}
+        run: |
+          $PSDefaultParameterValues['*:Confirm'] = $false
+          $ConfirmPreference = 'None'
+
+          # Importer Az.Accounts (5.1.1 - requis par AzFilesHybrid 0.3.2.0)
+          Import-Module -Name Az.Accounts -Global -Force -ErrorAction Stop
+          Write-Host "Module Az.Accounts v$((Get-Module Az.Accounts).Version) importe"
+
+          # Desactiver WAM pour eviter l'interception browser en session non-interactive
+          try {
+            Update-AzConfig -EnableLoginByWam $false
+            Write-Host "WAM desactive via Update-AzConfig"
+          } catch {
+            $env:AZURE_CLIENTS_DISABLE_WAM = "true"
+            Write-Host "WAM desactive via variable d'environnement"
+          }
+
+          # Recuperation du token OIDC depuis GitHub Actions
+          Write-Host "Recuperation du token OIDC depuis GitHub Actions..."
+          $tokenUrl      = "$env:ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange"
+          $tokenHeaders  = @{ Authorization = "Bearer $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN" }
+          $tokenResponse = Invoke-RestMethod -Uri $tokenUrl -Headers $tokenHeaders
+          $oidcToken     = $tokenResponse.value
+          Write-Host "Token OIDC recupere avec succes"
+
+          # Authentification via FederatedToken (OIDC)
+          Connect-AzAccount `
+            -ServicePrincipal `
+            -ApplicationId $env:CLIENT_ID `
+            -Tenant        $env:TENANT_ID `
+            -FederatedToken $oidcToken
+          Write-Host "Authentifie via OIDC FederatedToken"
+
+          Set-AzContext -SubscriptionId $env:SUB_ID -Confirm:$false
+          Write-Host "Contexte positionne sur : $env:SUB_ID"
+
+          # Importer Az.Resources (requis par Join-AzStorageAccount via Get-AzResourceGroup)
+          Import-Module -Name Az.Resources -Global -Force -ErrorAction Stop
+          Write-Host "Module Az.Resources v$((Get-Module Az.Resources).Version) importe"
+
+          # Importer AzFilesHybrid (contient Join-AzStorageAccount)
+          Import-Module -Name AzFilesHybrid -RequiredVersion 0.3.2.0 `
+            -Scope Local -Force -DisableNameChecking -ErrorAction Stop
+          Write-Host "Module AzFilesHybrid 0.3.2.0 importe"
+
+          # AD Join
+          $params = @{
+            ResourceGroupName                    = "${{ inputs.resource_group_name }}"
+            StorageAccountName                   = "${{ inputs.storage_account_name }}"
+            SamAccountName                       = "${{ inputs.storage_account_name }}"
+            DomainAccountType                    = "ComputerAccount"
+            OrganizationalUnitDistinguishedName  = "OU=Azure,OU=_servers,OU=EMEA,DC=fr1,DC=grs,DC=net"
+            OverwriteExistingADObject           = $true
+            ErrorAction                          = "Stop"
+            WarningAction                        = "SilentlyContinue"
+            Confirm                              = $false
+          }
+
+          Write-Host "Lancement de Join-AzStorageAccount pour : ${{ inputs.storage_account_name }}"
+          Join-AzStorageAccount @params
+          Write-Host "Storage Account joint a Active Directory avec succes"

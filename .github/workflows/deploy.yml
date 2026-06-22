@@ -1,0 +1,72 @@
+name: Deploy MTA-STS Policy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mta-sts-azure/app/**'
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+    paths:
+      - 'mta-sts-azure/app/**'
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "Domaine MTA-STS pour validation (ex: contoso.com)"
+        required: false
+        default: ""
+
+jobs:
+  deploy:
+    name: Deploy Static Web App
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Azure Static Web Apps
+        id: deploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_SWA_DEPLOYMENT_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: /mta-sts-azure/app
+          skip_app_build: true
+          output_location: ""
+
+      - name: Validate MTA-STS Policy URL
+        if: github.ref == 'refs/heads/main'
+        run: |
+          DOMAIN="${{ inputs.domain }}"
+          if [ -z "$DOMAIN" ]; then
+            echo "::warning::Pas de domaine fourni, validation ignorée. Relancez via workflow_dispatch avec le champ domain."
+            exit 0
+          fi
+          URL="https://mta-sts.${DOMAIN}/.well-known/mta-sts.txt"
+          echo "Validation de : $URL"
+          HTTP_CODE=$(curl -s -o /tmp/policy.txt -w "%{http_code}" "$URL" || echo "000")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "::notice::Stratégie MTA-STS accessible (HTTP $HTTP_CODE)"
+            cat /tmp/policy.txt
+          else
+            echo "::warning::La stratégie MTA-STS n'est pas encore accessible (HTTP $HTTP_CODE). Le domaine personnalisé est peut-être en cours de configuration."
+          fi
+
+  close_pr:
+    name: Close PR Environment
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Close SWA staging environment
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_SWA_DEPLOYMENT_TOKEN }}
+          action: close

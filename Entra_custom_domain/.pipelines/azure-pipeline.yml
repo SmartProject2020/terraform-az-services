@@ -1,0 +1,280 @@
+###############################################################
+# Pipeline Azure DevOps : Servier - Entra ID Custom Domain
+# Repo root   : servier-github/terraform-az-services (branch: poc)
+# Repo module : servier-github/Azure_Terraform_Modules (branch: poc)
+# Déclenché par ServiceNow via REST API :
+#   POST https://dev.azure.com/{org}/{project}/_apis/pipelines/{id}/runs?api-version=7.1
+###############################################################
+
+trigger: none
+
+resources:
+  repositories:
+    - repository: terraform-az-services
+      type: github
+      name: servier-github/terraform-az-services
+      ref: refs/heads/poc
+      endpoint: servier-github
+    - repository: Azure_Terraform_Modules
+      type: github
+      name: servier-github/Azure_Terraform_Modules
+      ref: refs/heads/poc
+      endpoint: servier-github
+
+parameters:
+  - name: action
+    displayName: "Action (add / remove)"
+    type: string
+    values: [add, remove]
+  - name: domain_name
+    displayName: "Nom de domaine (ex: entity-acquired.com)"
+    type: string
+  - name: servicenow_sys_id
+    displayName: "ServiceNow RITM sys_id (sc_task)"
+    type: string
+    default: ""
+
+variables:
+  - group: servier-entraid-domain-vars
+  # Contient : SERVICENOW_USER, SERVICENOW_PASSWORD
+  - name: AZURE_SERVICE_CONNECTION
+    value: "sc-oidc-em50-prd"
+  - name: TF_VERSION
+    value: "1.7.0"
+  - name: TF_ROOT_DIR
+    value: "$(System.DefaultWorkingDirectory)/terraform-az-services/Entra_custom_domain"
+  - name: TF_MODULE_DIR
+    value: "$(System.DefaultWorkingDirectory)/Azure_Terraform_Modules/Entra_custom_domain"
+  - name: TF_BACKEND_FILE
+    value: "$(TF_ROOT_DIR)/backend/EM50-PRD.tfbackend"
+  - name: SERVICENOW_BASE_URL
+    value: "https://servier2uat.service-now.com/api/now/table/sc_task"
+
+stages:
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 1 : Validation
+# ═══════════════════════════════════════════════════════════════
+- stage: Validate
+  displayName: " Validation"
+  jobs:
+    - job: ValidateParams
+      displayName: "Validation des paramètres"
+      pool:
+        vmImage: ubuntu-latest
+      steps:
+        - checkout: none
+        - script: |
+            echo "══════════════════════════════════"
+            echo " Paramètres reçus de ServiceNow"
+            echo "══════════════════════════════════"
+            echo "  Action      : ${{ parameters.action }}"
+            echo "  Domain      : ${{ parameters.domain_name }}"
+            echo "══════════════════════════════════"
+            if ! echo "${{ parameters.domain_name }}" | grep -qP '^[a-zA-Z0-9][a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}$'; then
+              echo " Format de domaine invalide : ${{ parameters.domain_name }}"
+              exit 1
+            fi
+            echo " Paramètres valides"
+          displayName: "Validation format domaine"
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 2 : Terraform Apply
+# ═══════════════════════════════════════════════════════════════
+- stage: TerraformApply
+  displayName: " Terraform Apply"
+  dependsOn: Validate
+  jobs:
+    - job: Apply
+      displayName: "terraform apply"
+      pool:
+        vmImage: ubuntu-latest
+      steps:
+        - checkout: terraform-az-services
+          displayName: "Checkout repo terraform-az-services (poc)"
+          fetchDepth: 1
+        - checkout: Azure_Terraform_Modules
+          displayName: "Checkout repo modules (poc)"
+          fetchDepth: 1
+
+        - script: |
+            TF_VERSION="$(TF_VERSION)"
+            wget -q https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+            unzip -q terraform_${TF_VERSION}_linux_amd64.zip
+            sudo mv terraform /usr/local/bin/
+            terraform version
+          displayName: "Installation Terraform $(TF_VERSION)"
+
+        - script: |
+            cat > $(TF_ROOT_DIR)/override.tf << EOF
+            module "entra_custom_domain" {
+              source = "$(TF_MODULE_DIR)"
+            }
+            EOF
+            echo " override.tf généré :"
+            cat $(TF_ROOT_DIR)/override.tf
+          displayName: "Génération override.tf (chemin local module)"
+
+        - task: AzureCLI@2
+          displayName: "terraform init + plan + apply (OIDC)"
+          inputs:
+            azureSubscription: $(AZURE_SERVICE_CONNECTION)
+            scriptType: bash
+            scriptLocation: inlineScript
+            addSpnToEnvironment: true
+            workingDirectory: $(TF_ROOT_DIR)
+            inlineScript: |
+              export ARM_CLIENT_ID=$servicePrincipalId
+              export ARM_TENANT_ID=$tenantId
+              export ARM_OIDC_TOKEN=$idToken
+              export ARM_USE_OIDC=true
+
+              echo "── terraform init ──"
+              terraform init -backend-config=$(TF_BACKEND_FILE)
+
+              echo "── terraform plan ──"
+              terraform plan \
+                -var="tenant_id=$tenantId" \
+                -var="client_id=$servicePrincipalId" \
+                -var="action=${{ parameters.action }}" \
+                -var="domain_name=${{ parameters.domain_name }}" \
+                -out=tfplan
+
+              echo "── terraform apply ──"
+              terraform apply -auto-approve tfplan
+
+        - task: AzureCLI@2
+          displayName: "Récupération TXT record (Graph API)"
+          name: TfOutputs
+          condition: eq('${{ parameters.action }}', 'add')
+          inputs:
+            azureSubscription: $(AZURE_SERVICE_CONNECTION)
+            scriptType: bash
+            scriptLocation: inlineScript
+            addSpnToEnvironment: true
+            inlineScript: |
+              echo "── Attente propagation Entra ID + récupération TXT record ──"
+
+              MAX_RETRIES=10
+              RETRY_DELAY=10
+              RETRY=0
+
+              until [ $RETRY -ge $MAX_RETRIES ]; do
+                echo "Tentative $((RETRY+1))/$MAX_RETRIES..."
+
+                GRAPH_TOKEN=$(az account get-access-token \
+                  --resource https://graph.microsoft.com \
+                  --query accessToken -o tsv)
+
+                HTTP_STATUS=$(curl -s -o /tmp/dns_records.json -w "%{http_code}" \
+                  --request GET \
+                  --url "https://graph.microsoft.com/v1.0/domains/${{ parameters.domain_name }}/verificationDnsRecords" \
+                  --header "Authorization: Bearer $GRAPH_TOKEN" \
+                  --header "Content-Type: application/json")
+
+                echo "HTTP Status : $HTTP_STATUS"
+
+                if [ "$HTTP_STATUS" = "200" ]; then
+                  echo " Domaine disponible dans Graph API"
+                  break
+                fi
+
+                RETRY=$((RETRY+1))
+                if [ $RETRY -lt $MAX_RETRIES ]; then
+                  echo " Pas encore prêt, nouvelle tentative dans ${RETRY_DELAY}s..."
+                  sleep $RETRY_DELAY
+                else
+                  echo " Domaine toujours indisponible après $((MAX_RETRIES * RETRY_DELAY))s"
+                  cat /tmp/dns_records.json
+                  exit 1
+                fi
+              done
+
+              echo "── Réponse Graph API ──"
+              cat /tmp/dns_records.json
+
+              TXT_VALUE=$(python3 -c "
+              import json
+              data = json.load(open('/tmp/dns_records.json'))
+              records = [r for r in data.get('value', []) if r.get('recordType') == 'Txt']
+              print(records[0]['text'] if records else '')
+              ")
+
+              echo "TXT Record Value : $TXT_VALUE"
+              echo "##vso[task.setvariable variable=TXT_RECORD_VALUE;isOutput=true]$TXT_VALUE"
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 3 : Notification ServiceNow
+# ═══════════════════════════════════════════════════════════════
+- stage: NotifyServiceNow
+  displayName: " Notification ServiceNow"
+  dependsOn: TerraformApply
+  variables:
+    TXT_RECORD_VALUE: $[ stageDependencies.TerraformApply.Apply.outputs['TfOutputs.TXT_RECORD_VALUE'] ]
+  jobs:
+    - job: Notify
+      displayName: "Callback ServiceNow"
+      pool:
+        vmImage: ubuntu-latest
+      steps:
+        - checkout: none
+
+        # ── action=add : ticket en attente + TXT record envoyé ──
+        - script: |
+            PAYLOAD=$(cat <<EOF
+            {
+              "u_pipeline_status": "terraform_done",
+              "u_txt_record_value": "$(TXT_RECORD_VALUE)",
+              "u_domain_name": "${{ parameters.domain_name }}",
+              "state": "2",
+              "comments": "Domaine ${{ parameters.domain_name }} créé dans Entra ID.\nTXT record à créer sur votre DNS :\nType  : TXT\nNom   : @\nValeur: $(TXT_RECORD_VALUE)\nTTL   : 3600\nUne fois créé, confirmez dans ce ticket pour déclencher la vérification."
+            }
+            EOF
+            )
+            BASIC_TOKEN=$(echo -n "$SERVICENOW_USER:$SERVICENOW_PASSWORD" | base64)
+          
+            HTTP_STATUS=$(curl -s -o /tmp/snow_response.json -w "%{http_code}" \
+              --request PUT \
+              --url "$(SERVICENOW_BASE_URL)/${{ parameters.servicenow_sys_id }}" \
+              --header "Authorization: Basic $BASIC_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$PAYLOAD")
+            echo "── Réponse ServiceNow ──"
+            echo "HTTP Status : $HTTP_STATUS"
+            cat /tmp/snow_response.json
+            [ "$HTTP_STATUS" = "200" ] || exit 1
+            echo " Ticket ServiceNow mis à jour — en attente confirmation DNS"
+          displayName: "Callback ServiceNow (add)"
+          condition: eq('${{ parameters.action }}', 'add')
+          env:
+            SERVICENOW_USER:     $(SERVICENOW_USER)
+            SERVICENOW_PASSWORD: $(SERVICENOW_PASSWORD)
+
+        # ── action=remove : fermeture du ticket ─────────────────
+        - script: |
+            PAYLOAD=$(cat <<EOF
+            {
+              "u_pipeline_status": "completed",
+              "u_domain_name": "${{ parameters.domain_name }}",
+              "state": "3",
+              "close_code": "Solved (Permanently)",
+              "close_notes": "Domaine ${{ parameters.domain_name }} supprimé du tenant Entra ID avec succès."
+            }
+            EOF
+            )
+            BASIC_TOKEN=$(echo -n "$SERVICENOW_USER:$SERVICENOW_PASSWORD" | base64)
+            HTTP_STATUS=$(curl -s -o /tmp/snow_response.json -w "%{http_code}" \
+              --request PUT \
+              --url "$(SERVICENOW_BASE_URL)/${{ parameters.servicenow_sys_id }}" \
+              --header "Authorization: Basic $BASIC_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$PAYLOAD")
+            echo "HTTP Status : $HTTP_STATUS"
+            cat /tmp/snow_response.json
+            [ "$HTTP_STATUS" = "200" ] || exit 1
+            echo " Ticket ServiceNow fermé"
+          displayName: "Callback ServiceNow (remove)"
+          condition: eq('${{ parameters.action }}', 'remove')
+          env:
+            SERVICENOW_USER:     $(SERVICENOW_USER)
+            SERVICENOW_PASSWORD: $(SERVICENOW_PASSWORD)

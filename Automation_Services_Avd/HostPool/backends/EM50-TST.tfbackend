@@ -1,0 +1,4 @@
+resource_group_name  = "EM50-NPR-INFRS-NPR-RG01"
+storage_account_name = "em50nprinfrssta01"
+container_name       = "tfstate-tst"
+key                  = "avd-hostpool-tfstate"

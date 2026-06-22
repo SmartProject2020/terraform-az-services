@@ -1,0 +1,5 @@
+resource_group_name  = "GL50-PRD-INFRS-PRD-RG01"
+storage_account_name = "gl50prdinfrssta01"
+container_name       = "tfstate-prd"
+key                  = "rg-tfstate"
+subscription_id      = "a96e6018-b2ce-46e9-a92b-50bf64b1e6cb"

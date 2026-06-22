@@ -1,0 +1,5 @@
+resource_group_name  = "EM50-PRD-INFRS-PRD-RG01"
+storage_account_name = "em50prdinfrssta01"
+container_name       = "tfstate-prd"
+key                  = "dns-tfstate"
+subscription_id      = "82b61300-dd3d-4331-b2a6-fa53bb6ba322"
