@@ -1,4 +1,4 @@
-resource_group_name  = "EM50-NPR-INFRS-NPR-RG01"
-storage_account_name = "em50nprinfrssta01"
+resource_group_name  = "rg-terraform-state"
+storage_account_name = "tfstateitmatched"
 container_name       = "tfstate-poc"
 key                  = "avd-hostpool-tfstate"
