@@ -61,21 +61,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: "0. Validation des inputs"
+      - name: "0. Normalisation et validation des inputs"
+        id: inputs
         run: |
           set -euo pipefail
-          if [ -z "${{ inputs.app_registration }}" ]; then
-            echo "::error::app_registration est obligatoire"
-            exit 1
-          fi
-          if [ -z "${{ inputs.scope }}" ]; then
-            echo "::error::scope est obligatoire"
-            exit 1
-          fi
-          if [ -z "${{ inputs.role }}" ]; then
-            echo "::error::role est obligatoire"
-            exit 1
-          fi
+          APP=$(echo "${{ inputs.app_registration }}" | xargs)
+          SCOPE=$(echo "${{ inputs.scope }}" | xargs)
+          ROLE=$(echo "${{ inputs.role }}" | xargs)
+
+          if [ -z "$APP" ]; then echo "::error::app_registration est obligatoire"; exit 1; fi
+          if [ -z "$SCOPE" ]; then echo "::error::scope est obligatoire"; exit 1; fi
+          if [ -z "$ROLE" ]; then echo "::error::role est obligatoire"; exit 1; fi
+
+          echo "app=$APP"     >> "$GITHUB_OUTPUT"
+          echo "scope=$SCOPE" >> "$GITHUB_OUTPUT"
+          echo "role=$ROLE"   >> "$GITHUB_OUTPUT"
+          echo "Inputs normalises : app='$APP' | scope='$SCOPE' | role='$ROLE'"
 
       - name: "1. Resolution secret Client ID OIDC"
         id: routing
@@ -95,7 +96,7 @@ jobs:
         id: resolve
         run: |
           set -euo pipefail
-          INPUT="${{ inputs.app_registration }}"
+          INPUT="${{ steps.inputs.outputs.app }}"
 
           # Tenter en tant qu'App ID (client_id / appId)
           OID=$(az ad sp show --id "$INPUT" --query id -o tsv 2>/dev/null || echo "")
@@ -122,8 +123,8 @@ jobs:
         run: |
           set -euo pipefail
           OID="${{ steps.resolve.outputs.oid }}"
-          SCOPE="${{ inputs.scope }}"
-          ROLE="${{ inputs.role }}"
+          SCOPE="${{ steps.inputs.outputs.scope }}"
+          ROLE="${{ steps.inputs.outputs.role }}"
           DISPLAY="${{ steps.resolve.outputs.display }}"
           ACTION="${{ inputs.action }}"
 
@@ -179,7 +180,7 @@ jobs:
         run: |
           set -euo pipefail
           OID="${{ steps.resolve.outputs.oid }}"
-          SCOPE="${{ inputs.scope }}"
+          SCOPE="${{ steps.inputs.outputs.scope }}"
           DISPLAY="${{ steps.resolve.outputs.display }}"
 
           echo "Roles actuels de '$DISPLAY' sur le scope :"
