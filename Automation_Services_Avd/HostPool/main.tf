@@ -50,7 +50,6 @@ module "subnet" {
 
   subnet_name = local.subnet_name
   nsg_name    = local.nsg_name
-  location    = var.location
 
   tags = local.common_tags
 }
