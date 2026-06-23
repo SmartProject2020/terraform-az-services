@@ -34,6 +34,11 @@ output "subnet_address_prefix" {
   value       = module.subnet.subnet_address_prefix
 }
 
+output "vm_location" {
+  description = "Region Azure pour les VMs/NICs (= region du VNET, peut differer de la region AVD)"
+  value       = module.subnet.vnet_location
+}
+
 output "network_security_group_id" {
   description = "ID du Network Security Group associe au subnet du Host Pool"
   value       = module.subnet.network_security_group_id

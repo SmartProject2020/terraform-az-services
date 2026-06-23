@@ -37,7 +37,7 @@ module "session_host" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Avd/SessionHost?ref=poc"
 
   resource_group_name = local.resource_group_name
-  location            = var.location
+  location            = local.vm_location
 
   name_prefix        = local.name_prefix
   session_host_count = local.session_host_count
