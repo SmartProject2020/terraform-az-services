@@ -1,0 +1,189 @@
+# ==============================================================================
+# GitHub Actions - RBAC Role Assignment
+# Auth : OIDC Workload Identity Federation (zero secret)
+# Gere : attribution ou suppression d'un role RBAC Azure pour une App Registration
+#
+# Prerequis :
+#   - Le SP OIDC doit avoir le role "User Access Administrator" sur le scope cible
+#   - L'App Registration doit exister dans le tenant
+# ==============================================================================
+
+name: RBAC - Role Assignment
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action a effectuer"
+        required: true
+        type: choice
+        options: [add, remove]
+
+      subscription_id:
+        description: "Azure Subscription ID"
+        required: true
+        type: string
+
+      plaque:
+        description: "Plaque (pour le routing OIDC)"
+        required: true
+        type: choice
+        options: [EM50, AM50, AP50, GL50]
+
+      setting:
+        description: "Setting (pour le routing OIDC)"
+        required: true
+        type: choice
+        options: [NPR, PRD]
+
+      app_registration:
+        description: "App Registration : App ID (client_id), Object ID, ou Display Name du Service Principal"
+        required: true
+        type: string
+
+      scope:
+        description: "Scope Azure (ex: /subscriptions/<id>, /subscriptions/<id>/resourceGroups/<rg>, ou resource ID complet)"
+        required: true
+        type: string
+
+      role:
+        description: "Nom du role RBAC (ex: Contributor, Reader, User Access Administrator, Storage Blob Data Contributor)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  rbac:
+    name: "RBAC ${{ inputs.action }} - ${{ inputs.role }} -> ${{ inputs.app_registration }}"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "0. Validation des inputs"
+        run: |
+          set -euo pipefail
+          if [ -z "${{ inputs.app_registration }}" ]; then
+            echo "::error::app_registration est obligatoire"
+            exit 1
+          fi
+          if [ -z "${{ inputs.scope }}" ]; then
+            echo "::error::scope est obligatoire"
+            exit 1
+          fi
+          if [ -z "${{ inputs.role }}" ]; then
+            echo "::error::role est obligatoire"
+            exit 1
+          fi
+
+      - name: "1. Resolution secret Client ID OIDC"
+        id: routing
+        run: |
+          SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_${{ inputs.plaque }}_${{ inputs.setting }}"
+          echo "secret=$SECRET_NAME" >> "$GITHUB_OUTPUT"
+          echo "Secret OIDC : $SECRET_NAME"
+
+      - name: "2. Azure Login (OIDC)"
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets[steps.routing.outputs.secret] }}
+          tenant-id:       ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ inputs.subscription_id }}
+
+      - name: "3. Resolution du Service Principal"
+        id: resolve
+        run: |
+          set -euo pipefail
+          INPUT="${{ inputs.app_registration }}"
+
+          # Tenter en tant qu'App ID (client_id / appId)
+          OID=$(az ad sp show --id "$INPUT" --query id -o tsv 2>/dev/null || echo "")
+
+          # Si vide, tenter en tant que display name
+          if [ -z "$OID" ]; then
+            OID=$(az ad sp list --display-name "$INPUT" --query "[0].id" -o tsv 2>/dev/null || echo "")
+          fi
+
+          if [ -z "$OID" ]; then
+            echo "::error::Service Principal introuvable pour '$INPUT'. Verifiez l'App ID, l'Object ID ou le Display Name."
+            exit 1
+          fi
+
+          DISPLAY=$(az ad sp show --id "$OID" --query displayName -o tsv 2>/dev/null || echo "$INPUT")
+          APP_ID=$(az ad sp show --id "$OID" --query appId -o tsv 2>/dev/null || echo "N/A")
+
+          echo "oid=$OID"         >> "$GITHUB_OUTPUT"
+          echo "display=$DISPLAY" >> "$GITHUB_OUTPUT"
+          echo "appid=$APP_ID"    >> "$GITHUB_OUTPUT"
+          echo "Service Principal : $DISPLAY (appId=$APP_ID, objectId=$OID)"
+
+      - name: "4. ${{ inputs.action == 'add' && 'Attribution' || 'Suppression' }} du role"
+        run: |
+          set -euo pipefail
+          OID="${{ steps.resolve.outputs.oid }}"
+          SCOPE="${{ inputs.scope }}"
+          ROLE="${{ inputs.role }}"
+          DISPLAY="${{ steps.resolve.outputs.display }}"
+          ACTION="${{ inputs.action }}"
+
+          echo "========================================"
+          echo "Action  : $ACTION"
+          echo "Role    : $ROLE"
+          echo "SP      : $DISPLAY ($OID)"
+          echo "Scope   : $SCOPE"
+          echo "========================================"
+
+          if [ "$ACTION" = "add" ]; then
+            # Verifier si l'assignment existe deja
+            EXISTING=$(az role assignment list \
+              --assignee "$OID" \
+              --role "$ROLE" \
+              --scope "$SCOPE" \
+              --query "[0].id" -o tsv 2>/dev/null || echo "")
+
+            if [ -n "$EXISTING" ]; then
+              echo "::warning::Le role '$ROLE' est deja attribue a '$DISPLAY' sur ce scope. Rien a faire."
+              echo "Assignment existant : $EXISTING"
+            else
+              echo "Attribution du role '$ROLE' a '$DISPLAY'..."
+              az role assignment create \
+                --assignee-object-id "$OID" \
+                --assignee-principal-type "ServicePrincipal" \
+                --role "$ROLE" \
+                --scope "$SCOPE"
+              echo "Role '$ROLE' attribue avec succes."
+            fi
+
+          elif [ "$ACTION" = "remove" ]; then
+            EXISTING=$(az role assignment list \
+              --assignee "$OID" \
+              --role "$ROLE" \
+              --scope "$SCOPE" \
+              --query "[0].id" -o tsv 2>/dev/null || echo "")
+
+            if [ -z "$EXISTING" ]; then
+              echo "::warning::Le role '$ROLE' n'est pas attribue a '$DISPLAY' sur ce scope. Rien a supprimer."
+            else
+              echo "Suppression du role '$ROLE' de '$DISPLAY'..."
+              az role assignment delete \
+                --assignee "$OID" \
+                --role "$ROLE" \
+                --scope "$SCOPE" \
+                --yes
+              echo "Role '$ROLE' supprime avec succes."
+            fi
+          fi
+
+      - name: "5. Verification"
+        run: |
+          set -euo pipefail
+          OID="${{ steps.resolve.outputs.oid }}"
+          SCOPE="${{ inputs.scope }}"
+          DISPLAY="${{ steps.resolve.outputs.display }}"
+
+          echo "Roles actuels de '$DISPLAY' sur le scope :"
+          az role assignment list \
+            --assignee "$OID" \
+            --scope "$SCOPE" \
+            --output table 2>/dev/null || echo "(aucun role sur ce scope)"
