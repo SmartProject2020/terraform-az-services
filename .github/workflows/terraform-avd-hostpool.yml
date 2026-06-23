@@ -251,6 +251,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.5"
+          terraform_wrapper: false
 
       # ========================================================================
       # ETAPE 3 : Routing OIDC + backend
@@ -280,11 +281,6 @@ jobs:
           client-id:       ${{ secrets[steps.routing.outputs.secret] }}
           tenant-id:       ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ inputs.subscription_id }}
-
-      - name: "5. Install Terraform"
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.7.5"
 
       # ========================================================================
       # ETAPE 6 : Generation tfvars
