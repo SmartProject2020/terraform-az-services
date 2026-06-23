@@ -10,7 +10,7 @@ locals {
 
   # Subnet dedie au Host Pool (module Avd/Subnet, cree par Automation_Services_Avd_HostPool)
   subnet_id    = data.terraform_remote_state.host_pool.outputs.subnet_id
-  vm_location  = data.terraform_remote_state.host_pool.outputs.vm_location
+  vnet_rg_name = regex("resourceGroups/([^/]+)/", local.subnet_id)[0]
 
   # Prefixe de nommage des Session Hosts — TAD section 2.2 : <AVD><HostPoolID>-<n>
   name_prefix = "AVD${local.host_pool_name}"

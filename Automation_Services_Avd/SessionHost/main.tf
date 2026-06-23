@@ -33,11 +33,15 @@ data "azurerm_key_vault_secret" "admin" {
   key_vault_id = data.terraform_remote_state.host_pool.outputs.kv_id
 }
 
+data "azurerm_resource_group" "vnet_rg" {
+  name = local.vnet_rg_name
+}
+
 module "session_host" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Avd/SessionHost?ref=poc"
 
   resource_group_name = local.resource_group_name
-  location            = local.vm_location
+  location            = data.azurerm_resource_group.vnet_rg.location
 
   name_prefix        = local.name_prefix
   session_host_count = local.session_host_count
