@@ -577,7 +577,7 @@ jobs:
               --query id -o tsv 2>/dev/null || echo "")
             if [ -n "$SP_EXISTS" ]; then
               SP_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/scalingPlans/${SP_NAME}"
-              if ! terraform state list | grep -qF "azurerm_virtual_desktop_scaling_plan.sp[0]"; then
+              if ! terraform state list | grep -q "azurerm_virtual_desktop_scaling_plan.sp"; then
                 echo "Import ScalingPlan $SP_NAME..."
                 terraform import -var-file="${{ env.TF_VARFILE }}" \
                   'azurerm_virtual_desktop_scaling_plan.sp[0]' "$SP_ID"
