@@ -203,4 +203,9 @@ jobs:
           az role assignment list \
             --assignee "$ASSIGNEE" \
             --scope "$SCOPE" \
-            --output table 2>/dev/null || echo "(aucun role sur ce scope)"
+            --output table 2>&1 \
+          || az role assignment list \
+            --scope "$SCOPE" \
+            --query "[?principalId=='$ASSIGNEE']" \
+            --output table 2>/dev/null \
+          || echo "(verification impossible — permissions Graph insuffisantes pour lister les assignments par assignee)"
