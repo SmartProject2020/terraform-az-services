@@ -111,23 +111,28 @@ jobs:
             OID=$(az ad sp list --display-name "$INPUT" --query "[0].id" -o tsv 2>/dev/null || echo "")
           fi
 
-          if [ -z "$OID" ]; then
-            echo "::error::Service Principal introuvable pour '$INPUT'. Verifiez l'App ID, l'Object ID ou le Display Name."
-            exit 1
+          if [ -n "$OID" ]; then
+            DISPLAY=$(az ad sp show --id "$OID" --query displayName -o tsv 2>/dev/null || echo "$INPUT")
+            APP_ID=$(az ad sp show --id "$OID" --query appId -o tsv 2>/dev/null || echo "N/A")
+            ASSIGNEE="$OID"
+            PRINCIPAL_TYPE="ServicePrincipal"
+            echo "Service Principal resolu : $DISPLAY (appId=$APP_ID, objectId=$OID)"
+          else
+            echo "::warning::Resolution Graph impossible pour '$INPUT' (permissions Graph insuffisantes ?). Utilisation directe comme assignee."
+            ASSIGNEE="$INPUT"
+            PRINCIPAL_TYPE=""
+            DISPLAY="$INPUT"
           fi
 
-          DISPLAY=$(az ad sp show --id "$OID" --query displayName -o tsv 2>/dev/null || echo "$INPUT")
-          APP_ID=$(az ad sp show --id "$OID" --query appId -o tsv 2>/dev/null || echo "N/A")
-
-          echo "oid=$OID"         >> "$GITHUB_OUTPUT"
-          echo "display=$DISPLAY" >> "$GITHUB_OUTPUT"
-          echo "appid=$APP_ID"    >> "$GITHUB_OUTPUT"
-          echo "Service Principal : $DISPLAY (appId=$APP_ID, objectId=$OID)"
+          echo "assignee=$ASSIGNEE"             >> "$GITHUB_OUTPUT"
+          echo "principal_type=$PRINCIPAL_TYPE"  >> "$GITHUB_OUTPUT"
+          echo "display=$DISPLAY"               >> "$GITHUB_OUTPUT"
 
       - name: "4. ${{ inputs.action == 'add' && 'Attribution' || 'Suppression' }} du role"
         run: |
           set -euo pipefail
-          OID="${{ steps.resolve.outputs.oid }}"
+          ASSIGNEE="${{ steps.resolve.outputs.assignee }}"
+          PRINCIPAL_TYPE="${{ steps.resolve.outputs.principal_type }}"
           SCOPE="${{ steps.inputs.outputs.scope }}"
           ROLE="${{ steps.inputs.outputs.role }}"
           DISPLAY="${{ steps.resolve.outputs.display }}"
@@ -136,14 +141,13 @@ jobs:
           echo "========================================"
           echo "Action  : $ACTION"
           echo "Role    : $ROLE"
-          echo "SP      : $DISPLAY ($OID)"
+          echo "Assignee: $DISPLAY ($ASSIGNEE)"
           echo "Scope   : $SCOPE"
           echo "========================================"
 
           if [ "$ACTION" = "add" ]; then
-            # Verifier si l'assignment existe deja
             EXISTING=$(az role assignment list \
-              --assignee "$OID" \
+              --assignee "$ASSIGNEE" \
               --role "$ROLE" \
               --scope "$SCOPE" \
               --query "[0].id" -o tsv 2>/dev/null || echo "")
@@ -153,17 +157,24 @@ jobs:
               echo "Assignment existant : $EXISTING"
             else
               echo "Attribution du role '$ROLE' a '$DISPLAY'..."
-              az role assignment create \
-                --assignee-object-id "$OID" \
-                --assignee-principal-type "ServicePrincipal" \
-                --role "$ROLE" \
-                --scope "$SCOPE"
+              if [ -n "$PRINCIPAL_TYPE" ]; then
+                az role assignment create \
+                  --assignee-object-id "$ASSIGNEE" \
+                  --assignee-principal-type "$PRINCIPAL_TYPE" \
+                  --role "$ROLE" \
+                  --scope "$SCOPE"
+              else
+                az role assignment create \
+                  --assignee "$ASSIGNEE" \
+                  --role "$ROLE" \
+                  --scope "$SCOPE"
+              fi
               echo "Role '$ROLE' attribue avec succes."
             fi
 
           elif [ "$ACTION" = "remove" ]; then
             EXISTING=$(az role assignment list \
-              --assignee "$OID" \
+              --assignee "$ASSIGNEE" \
               --role "$ROLE" \
               --scope "$SCOPE" \
               --query "[0].id" -o tsv 2>/dev/null || echo "")
@@ -173,7 +184,7 @@ jobs:
             else
               echo "Suppression du role '$ROLE' de '$DISPLAY'..."
               az role assignment delete \
-                --assignee "$OID" \
+                --assignee "$ASSIGNEE" \
                 --role "$ROLE" \
                 --scope "$SCOPE" \
                 --yes
@@ -184,12 +195,12 @@ jobs:
       - name: "5. Verification"
         run: |
           set -euo pipefail
-          OID="${{ steps.resolve.outputs.oid }}"
+          ASSIGNEE="${{ steps.resolve.outputs.assignee }}"
           SCOPE="${{ steps.inputs.outputs.scope }}"
           DISPLAY="${{ steps.resolve.outputs.display }}"
 
           echo "Roles actuels de '$DISPLAY' sur le scope :"
           az role assignment list \
-            --assignee "$OID" \
+            --assignee "$ASSIGNEE" \
             --scope "$SCOPE" \
             --output table 2>/dev/null || echo "(aucun role sur ce scope)"
