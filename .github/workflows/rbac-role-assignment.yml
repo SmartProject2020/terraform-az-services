@@ -98,8 +98,13 @@ jobs:
           set -euo pipefail
           INPUT="${{ steps.inputs.outputs.app }}"
 
-          # Tenter en tant qu'App ID (client_id / appId)
+          # Tenter en tant qu'App ID ou Object ID (az ad sp show accepte les deux)
           OID=$(az ad sp show --id "$INPUT" --query id -o tsv 2>/dev/null || echo "")
+
+          # Si vide, tenter par appId via filter (SP first-party Microsoft non resolus par --id)
+          if [ -z "$OID" ]; then
+            OID=$(az ad sp list --filter "appId eq '$INPUT'" --query "[0].id" -o tsv 2>/dev/null || echo "")
+          fi
 
           # Si vide, tenter en tant que display name
           if [ -z "$OID" ]; then
