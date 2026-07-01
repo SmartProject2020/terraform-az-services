@@ -597,23 +597,17 @@ jobs:
           SHARE_FULL_NAME=$(echo "${{ inputs.application_id }}-fslogix" | tr '[:upper:]' '[:lower:]')
           DIR_ADDR="azurerm_storage_share_directory.profils"
 
-          DIR_EXISTS=$(az storage directory exists \
-            --name "profils" \
-            --share-name "$SHARE_FULL_NAME" \
-            --account-name "$SA_NAME" \
-            --auth-mode login \
-            --query exists -o tsv 2>/dev/null || echo "false")
-
-          if [ "$DIR_EXISTS" = "true" ]; then
-            if ! echo "$STATE_LIST" | grep -qF "$DIR_ADDR"; then
-              DIR_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Storage/storageAccounts/${SA_NAME}/fileServices/default/shares/${SHARE_FULL_NAME}/directories/profils"
-              echo "Import repertoire profils..."
-              terraform import -var-file="${{ env.TF_VARFILE }}" "$DIR_ADDR" "$DIR_ID"
-            else
-              echo "Repertoire profils deja dans le state. Import ignore."
-            fi
+          # Import incondititionnel si absent du state : on essaie, echec = warning
+          # (az storage directory exists --auth-mode login peut echouer silencieusement
+          # si les droits data-plane ne sont pas encore propages)
+          # azurerm_storage_share_directory attend l URL HTTPS (pas l ID ARM)
+          if ! echo "$STATE_LIST" | grep -qF "$DIR_ADDR"; then
+            DIR_URL="https://${SA_NAME}.file.core.windows.net/${SHARE_FULL_NAME}/profils"
+            echo "Tentative import repertoire profils ($DIR_URL)..."
+            terraform import -var-file="${{ env.TF_VARFILE }}" "$DIR_ADDR" "$DIR_URL" || \
+              echo "::warning::Import repertoire profils echoue (absent ou droits data-plane insuffisants) — sera cree par Terraform"
           else
-            echo "Repertoire profils absent — sera cree par Terraform."
+            echo "Repertoire profils deja dans le state. Import ignore."
           fi
 
           # ── Storage Account FSLogix ───────────────────────────────────────
