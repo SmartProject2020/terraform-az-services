@@ -519,7 +519,8 @@ jobs:
           if [ -n "$GROUP_USERS_ID" ]; then
             if ! echo "$STATE_LIST" | grep -qF "azuread_group.users"; then
               echo "Import groupe $GROUP_USERS_NAME..."
-              terraform import -var-file="${{ env.TF_VARFILE }}" "azuread_group.users" "$GROUP_USERS_ID"
+              # azuread v3+ attend le format OData /groups/{objectId}
+              terraform import -var-file="${{ env.TF_VARFILE }}" "azuread_group.users" "/groups/${GROUP_USERS_ID}"
             else
               echo "Groupe $GROUP_USERS_NAME deja dans le state. Import ignore."
             fi
