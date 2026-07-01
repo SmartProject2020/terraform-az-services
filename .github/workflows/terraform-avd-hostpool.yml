@@ -483,17 +483,16 @@ jobs:
           RAND_ADDR="random_password.admin"
           SECRET_ADDR="azurerm_key_vault_secret.admin"
 
-          if KV_PW=$(az keyvault secret show \
+          if KV_SECRET_JSON=$(az keyvault secret show \
             --vault-name "$KV_NAME" \
-            --name "$SECRET_NAME" \
-            --query value -o tsv 2>/dev/null); then
+            --name "$SECRET_NAME" 2>/dev/null); then
 
+            KV_PW=$(echo "$KV_SECRET_JSON" | jq -r '.value')
+            # azurerm_key_vault_secret import attend l'URL versionnee retournee par az cli
+            # ex: https://vault.vault.azure.net/secrets/name/abc123version
+            SECRET_ID=$(echo "$KV_SECRET_JSON" | jq -r '.id')
             echo "::add-mask::$KV_PW"
-            echo "Secret '$SECRET_NAME' present dans le Key Vault '$KV_NAME' -> import..."
-
-            # azurerm_key_vault_secret attend l'URL KV (pas l'ARM resource ID)
-            KV_HOSTNAME=$(echo "$KV_NAME" | tr '[:upper:]' '[:lower:]')
-            SECRET_ID="https://${KV_HOSTNAME}.vault.azure.net/secrets/${SECRET_NAME}"
+            echo "Secret '$SECRET_NAME' present dans '$KV_NAME' -> import..."
 
             if ! echo "$STATE_LIST" | grep -qF "$SECRET_ADDR"; then
               terraform import -var-file="${{ env.TF_VARFILE }}" "$SECRET_ADDR" "$SECRET_ID"
