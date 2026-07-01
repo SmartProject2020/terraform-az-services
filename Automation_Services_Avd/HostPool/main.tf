@@ -12,7 +12,7 @@ data "azurerm_resource_group" "rg" {
 }
 
 module "host_pool" {
-  source = "git::https://github.com/servier-github/terraform-az-modules.git//Avd/HostPool?ref=poc"
+  source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Avd/HostPool?ref=poc"
 
   resource_group_name = data.azurerm_resource_group.rg.name
   location            = var.location
@@ -41,7 +41,7 @@ module "host_pool" {
 # "flux standard" (HLD section 9.5.1). VNET et RG cibles determines via la
 # table de correspondance SETTING+NETWORK_ZONE (local.network).
 module "subnet" {
-  source = "git::https://github.com/servier-github/terraform-az-modules.git//Avd/Subnet?ref=poc"
+  source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Avd/Subnet?ref=poc"
 
   resource_group_name  = local.network.resource_group_name
   virtual_network_name = local.network.virtual_network_name
@@ -56,7 +56,7 @@ module "subnet" {
 # "fslogix" par Host Pool, dans le meme Resource Group. Redondance derivee de
 # l environnement (local.storage_redundancy).
 module "storage_account" {
-  source = "git::https://github.com/servier-github/terraform-az-modules.git//StorageAccount?ref=poc"
+  source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//StorageAccount?ref=poc"
 
   resource_group_name              = data.azurerm_resource_group.rg.name
   storage_account_name             = local.storage_account_name
@@ -71,7 +71,7 @@ module "storage_account" {
 }
 
 module "fileshare" {
-  source = "git::https://github.com/servier-github/terraform-az-modules.git//Fileshare?ref=poc"
+  source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Fileshare?ref=poc"
 
   storage_account_id = module.storage_account.storage_account_id
   fileshares         = ["fslogix"]
@@ -88,7 +88,7 @@ resource "azurerm_storage_share_directory" "profils" {
 # Private Endpoint FSLogix — acces prive depuis le subnet AVD (HLD section 9)
 # La DNS zone privatelink.file.core.windows.net est hebergee dans GL50-RG006 (hub_subscription).
 module "private_endpoint" {
-  source = "git::https://github.com/servier-github/terraform-az-modules.git//PrivateEndpoint?ref=poc"
+  source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//PrivateEndpoint?ref=poc"
 
   resource_group_name      = data.azurerm_resource_group.rg.name
   resource_group_name_vnet = local.network.resource_group_name
