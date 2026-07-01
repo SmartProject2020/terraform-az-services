@@ -668,13 +668,14 @@ jobs:
           fi
 
           # ── Fileshare FSLogix ─────────────────────────────────────────────
+          # Check via ARM (pas data-plane) : le SP OIDC n a pas forcement les droits SMB
           SHARE_ADDR='module.fileshare.azurerm_storage_share.share["fslogix"]'
-          SHARE_URL="https://${SA_NAME}.file.core.windows.net/${SHARE_FULL_NAME}"
-          SHARE_EXISTS=$(az storage share exists \
-            --name "$SHARE_FULL_NAME" --account-name "$SA_NAME" \
-            --auth-mode login --query exists -o tsv 2>/dev/null || echo "false")
-          if [ "$SHARE_EXISTS" = "true" ]; then
+          SHARE_ARM_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Storage/storageAccounts/${SA_NAME}/fileServices/default/shares/${SHARE_FULL_NAME}"
+          SHARE_EXISTS=$(az resource show --ids "$SHARE_ARM_ID" --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$SHARE_EXISTS" ]; then
             if ! echo "$STATE_LIST" | grep -qF 'module.fileshare.azurerm_storage_share.share'; then
+              # azurerm v4 azurerm_storage_share import attend l URL HTTPS
+              SHARE_URL="https://${SA_NAME}.file.core.windows.net/${SHARE_FULL_NAME}"
               echo "Import Fileshare $SHARE_FULL_NAME..."
               terraform import -var-file="${{ env.TF_VARFILE }}" "$SHARE_ADDR" "$SHARE_URL"
             else
