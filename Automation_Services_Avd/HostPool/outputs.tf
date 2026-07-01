@@ -39,9 +39,9 @@ output "vm_location" {
   value       = module.subnet.vnet_location
 }
 
-output "network_security_group_id" {
-  description = "ID du Network Security Group associe au subnet du Host Pool"
-  value       = module.subnet.network_security_group_id
+output "route_table_id" {
+  description = "ID de la Route Table associee au subnet du Host Pool"
+  value       = module.subnet.route_table_id
 }
 
 output "fslogix_storage_account_name" {
@@ -69,6 +69,11 @@ output "users_group_id" {
   value       = azuread_group.users.object_id
 }
 
+output "devices_group_id" {
+  description = "Object ID du groupe Entra ID CB-GO-AVD<POOL>-DEVICES"
+  value       = azuread_group.devices.object_id
+}
+
 output "app_group_id" {
   description = "ID du Desktop Application Group (<POOL_NAME>-DAG)"
   value       = azurerm_virtual_desktop_application_group.dag.id
@@ -77,4 +82,9 @@ output "app_group_id" {
 output "workspace_id" {
   description = "ID du Workspace AVD (<POOL_NAME>)"
   value       = azurerm_virtual_desktop_workspace.ws.id
+}
+
+output "private_endpoint_id" {
+  description = "ID du Private Endpoint FSLogix ({PLAQUE}-{SETTING}-{POOL_ID}-PE{NN})"
+  value       = module.private_endpoint.endpoint_id
 }

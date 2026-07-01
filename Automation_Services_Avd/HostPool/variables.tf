@@ -74,9 +74,9 @@ variable "POOL_ID" {
 }
 
 variable "POOL_VERSION" {
-  description = "Version/increment du pool (suffixe du nom, ex: 1)"
-  type        = string
-  default     = "1"
+  description = "Version/increment du pool, utilise comme suffixe numerique des ressources (ex: 1 -> 01)"
+  type        = number
+  default     = 1
 }
 
 # ==============================================================================
@@ -148,6 +148,11 @@ variable "FSLOGIX_QUOTA_GB" {
   default     = 100
 }
 
+variable "HUB_SUBSCRIPTION_ID" {
+  description = "ID de la subscription GL50-HUBCENTRAL hebergeant la Private DNS Zone 'privatelink.file.core.windows.net' (GL50-RG006)"
+  type        = string
+}
+
 # ==============================================================================
 # Key Vault AVD partage (pre-existant, 1 par subscription/env)
 # Convention par defaut : ${PLAQUE}-${SETTING}-AVD00-KV01
@@ -165,6 +170,7 @@ variable "KV_RESOURCE_GROUP_NAME" {
   type        = string
   default     = null
 }
+
 
 # ==============================================================================
 # ScalingPlan — Personal uniquement (HLD 12.2)

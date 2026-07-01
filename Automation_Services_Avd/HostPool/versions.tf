@@ -1,10 +1,13 @@
 terraform {
-  backend "azurerm" {}
+  backend "azurerm" {
+    use_oidc = true
+  }
 
   required_providers {
     azurerm = {
-      source  = "hashicorp/azurerm"
-      version = ">= 3.53.0"
+      source                = "hashicorp/azurerm"
+      version               = "= 4.75.0"
+      configuration_aliases = [azurerm.hub_subscription]
     }
     azuread = {
       source  = "hashicorp/azuread"

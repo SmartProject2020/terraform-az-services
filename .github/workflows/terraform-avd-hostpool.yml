@@ -180,6 +180,14 @@ on:
         default: ""
         type: string
 
+      # ------------------------------------------------------------------
+      # Private Endpoint FSLogix — DNS zone hebergee dans GL50-HUBCENTRAL
+      # ------------------------------------------------------------------
+      hub_subscription_id:
+        description: "Subscription ID GL50-HUBCENTRAL (DNS zone privatelink.file.core.windows.net dans GL50-RG006)"
+        required: true
+        type: string
+
       scaling_plan_time_zone:
         description: "Fuseau horaire du ScalingPlan Pooled (valeur Windows, ex: 'Romance Standard Time' pour Paris)"
         required: false
@@ -212,6 +220,7 @@ jobs:
       TF_VAR_FSLOGIX_QUOTA_GB:   "${{ inputs.fslogix_quota_gb }}"
       TF_VAR_KV_NAME:                "${{ inputs.kv_name }}"
       TF_VAR_KV_RESOURCE_GROUP_NAME: "${{ inputs.kv_resource_group_name }}"
+      TF_VAR_HUB_SUBSCRIPTION_ID:   "${{ inputs.hub_subscription_id }}"
 
     steps:
       # ========================================================================
@@ -241,7 +250,7 @@ jobs:
       - name: "2. Checkout terraform-az-services"
         uses: actions/checkout@v4
         with:
-          repository: SmartProject2020/terraform-az-services
+          repository: servier-github/terraform-az-services
           ref: poc
           token: ${{ steps.app-token.outputs.token }}
           path: terraform-az-services
@@ -372,15 +381,22 @@ jobs:
       # ========================================================================
       # ETAPE 8a : Calcul noms ressources (RG + Host Pool)
       # ========================================================================
-      - name: "8a. Calcul noms ressources (RG + Host Pool)"
+      - name: "8a. Calcul noms ressources (RG + Host Pool + Storage)"
         id: names
         run: |
           set -euo pipefail
+          VER_PAD=$(printf "%02d" "${{ inputs.pool_version }}")
           RG=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-RG${{ inputs.resource_group_inc }}" | tr '[:lower:]' '[:upper:]')
           HP=$(echo "${{ inputs.pool_type }}${{ inputs.pool_id }}${{ inputs.pool_version }}" | tr '[:lower:]' '[:upper:]')
+          SA=$(echo "${{ inputs.plaque }}${{ inputs.setting }}${{ inputs.pool_type }}${{ inputs.pool_id }}sta${VER_PAD}" | tr '[:upper:]' '[:lower:]')
+          PE=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-PE${VER_PAD}" | tr '[:lower:]' '[:upper:]')
+          SP=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SP${VER_PAD}" | tr '[:lower:]' '[:upper:]')
           echo "rg=$RG" >> "$GITHUB_OUTPUT"
           echo "hp=$HP" >> "$GITHUB_OUTPUT"
-          echo "RG=$RG | HostPool=$HP"
+          echo "sa=$SA" >> "$GITHUB_OUTPUT"
+          echo "pe=$PE" >> "$GITHUB_OUTPUT"
+          echo "sp=$SP" >> "$GITHUB_OUTPUT"
+          echo "RG=$RG | HostPool=$HP | StorageAccount=$SA | PE=$PE | SP=$SP"
 
       # ========================================================================
       # ETAPE 8b : Import ressources existantes
@@ -411,8 +427,10 @@ jobs:
             terraform state show "$1" 2>/dev/null | grep "^.*id " | head -1 | sed -E 's/.*= *"([^"]+)".*/\1/' || echo ""
           }
 
+          STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+
           # ── Migration : RG etait gere, maintenant data source — purge state ──
-          if terraform state list | grep -qF "$RG_ADDR"; then
+          if echo "$STATE_LIST" | grep -qF "$RG_ADDR"; then
             echo "RG present dans le state (ancienne version) -> suppression sans destroy Azure"
             terraform state rm "$RG_ADDR" || true
           fi
@@ -433,7 +451,7 @@ jobs:
             HP_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/hostPools/${HP_NAME}"
             echo "Host Pool existe : $HP_ID"
 
-            if terraform state list | grep -qF "$HP_ADDR"; then
+            if echo "$STATE_LIST" | grep -qF "$HP_ADDR"; then
               STATE_HP_ID=$(state_id "$HP_ADDR")
               if [ -n "$STATE_HP_ID" ] && [ "$STATE_HP_ID" != "$HP_ID" ]; then
                 echo "Host Pool dans le state different -> nettoyage + reimport"
@@ -449,7 +467,7 @@ jobs:
             fi
 
             # Le sous-objet registration info partage l'ID du Host Pool
-            if terraform state list | grep -qF "$REG_ADDR"; then
+            if echo "$STATE_LIST" | grep -qF "$REG_ADDR"; then
               echo "Registration info deja dans le state. Import ignore."
             else
               echo "Import registration info dans le state..."
@@ -485,13 +503,13 @@ jobs:
               --query id -o tsv)
             SECRET_ID="${KV_ID}/secrets/${SECRET_NAME}"
 
-            if ! terraform state list | grep -qF "$SECRET_ADDR"; then
+            if ! echo "$STATE_LIST" | grep -qF "$SECRET_ADDR"; then
               terraform import -var-file="${{ env.TF_VARFILE }}" "$SECRET_ADDR" "$SECRET_ID"
             else
               echo "Secret deja dans le state. Import ignore."
             fi
 
-            if ! terraform state list | grep -qF "$RAND_ADDR"; then
+            if ! echo "$STATE_LIST" | grep -qF "$RAND_ADDR"; then
               # random_password supporte l'import depuis hashicorp/random >= 3.4.0
               # Format : "<ID>" = virgule suivie de la valeur du mot de passe
               terraform import -var-file="${{ env.TF_VARFILE }}" "$RAND_ADDR" ",$KV_PW"
@@ -508,7 +526,7 @@ jobs:
 
           GROUP_USERS_ID=$(az ad group show --group "$GROUP_USERS_NAME" --query id -o tsv 2>/dev/null || echo "")
           if [ -n "$GROUP_USERS_ID" ]; then
-            if ! terraform state list | grep -qF "azuread_group.users"; then
+            if ! echo "$STATE_LIST" | grep -qF "azuread_group.users"; then
               echo "Import groupe $GROUP_USERS_NAME..."
               terraform import -var-file="${{ env.TF_VARFILE }}" "azuread_group.users" "$GROUP_USERS_ID"
             else
@@ -526,7 +544,7 @@ jobs:
             --query id -o tsv 2>/dev/null || echo "")
           if [ -n "$DAG_EXISTS" ]; then
             DAG_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/applicationGroups/${DAG_NAME}"
-            if ! terraform state list | grep -qF "azurerm_virtual_desktop_application_group.dag"; then
+            if ! echo "$STATE_LIST" | grep -qF "azurerm_virtual_desktop_application_group.dag"; then
               echo "Import AppGroup $DAG_NAME..."
               terraform import -var-file="${{ env.TF_VARFILE }}" "azurerm_virtual_desktop_application_group.dag" "$DAG_ID"
             else
@@ -545,7 +563,7 @@ jobs:
             --query id -o tsv 2>/dev/null || echo "")
           if [ -n "$WS_EXISTS" ]; then
             WS_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/workspaces/${WS_NAME}"
-            if ! terraform state list | grep -qF "azurerm_virtual_desktop_workspace.ws"; then
+            if ! echo "$STATE_LIST" | grep -qF "azurerm_virtual_desktop_workspace.ws"; then
               echo "Import Workspace $WS_NAME..."
               terraform import -var-file="${{ env.TF_VARFILE }}" "azurerm_virtual_desktop_workspace.ws" "$WS_ID"
             else
@@ -555,7 +573,7 @@ jobs:
             # Association Workspace <-> AppGroup
             if [ -n "$DAG_ID" ]; then
               WS_DAG_IMPORT_ID="${WS_ID}|${DAG_ID}"
-              if ! terraform state list | grep -qF "azurerm_virtual_desktop_workspace_application_group_association.ws_dag"; then
+              if ! echo "$STATE_LIST" | grep -qF "azurerm_virtual_desktop_workspace_application_group_association.ws_dag"; then
                 echo "Import association Workspace/AppGroup..."
                 terraform import -var-file="${{ env.TF_VARFILE }}" \
                   "azurerm_virtual_desktop_workspace_application_group_association.ws_dag" "$WS_DAG_IMPORT_ID" || \
@@ -568,16 +586,61 @@ jobs:
             echo "Workspace $WS_NAME absent — sera cree par Terraform."
           fi
 
+          # ── Repertoire profils (Task #4b) ────────────────────────────────
+          SA_NAME="${{ steps.names.outputs.sa }}"
+          SHARE_FULL_NAME=$(echo "${{ inputs.application_id }}-fslogix" | tr '[:upper:]' '[:lower:]')
+          DIR_ADDR="azurerm_storage_share_directory.profils"
+
+          DIR_EXISTS=$(az storage directory exists \
+            --name "profils" \
+            --share-name "$SHARE_FULL_NAME" \
+            --account-name "$SA_NAME" \
+            --auth-mode login \
+            --query exists -o tsv 2>/dev/null || echo "false")
+
+          if [ "$DIR_EXISTS" = "true" ]; then
+            if ! echo "$STATE_LIST" | grep -qF "$DIR_ADDR"; then
+              DIR_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Storage/storageAccounts/${SA_NAME}/fileServices/default/shares/${SHARE_FULL_NAME}/directories/profils"
+              echo "Import repertoire profils..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" "$DIR_ADDR" "$DIR_ID"
+            else
+              echo "Repertoire profils deja dans le state. Import ignore."
+            fi
+          else
+            echo "Repertoire profils absent — sera cree par Terraform."
+          fi
+
+          # ── Private Endpoint FSLogix ─────────────────────────────────────
+          PE_NAME="${{ steps.names.outputs.pe }}"
+          PE_ADDR="module.private_endpoint.azurerm_private_endpoint.endpoint"
+          PE_EXISTS=$(az resource show \
+            --resource-type "Microsoft.Network/privateEndpoints" \
+            --name "$PE_NAME" \
+            --resource-group "$RG_NAME" \
+            --subscription "$SUB" \
+            --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$PE_EXISTS" ]; then
+            PE_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Network/privateEndpoints/${PE_NAME}"
+            if ! echo "$STATE_LIST" | grep -qF "$PE_ADDR"; then
+              echo "Import Private Endpoint $PE_NAME..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" "$PE_ADDR" "$PE_ID"
+            else
+              echo "Private Endpoint $PE_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "Private Endpoint $PE_NAME absent — sera cree par Terraform."
+          fi
+
           # ── ScalingPlan (Task #7, Pooled uniquement) ──────────────────────
           if [ "${{ inputs.pool_type }}" = "M" ]; then
-            SP_NAME="${HP_NAME}-SP"
+            SP_NAME="${{ steps.names.outputs.sp }}"
             SP_EXISTS=$(az resource show \
               --resource-type "Microsoft.DesktopVirtualization/scalingPlans" \
               --name "$SP_NAME" --resource-group "$RG_NAME" --subscription "$SUB" \
               --query id -o tsv 2>/dev/null || echo "")
             if [ -n "$SP_EXISTS" ]; then
               SP_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/scalingPlans/${SP_NAME}"
-              if ! terraform state list | grep -q "azurerm_virtual_desktop_scaling_plan.sp"; then
+              if ! echo "$STATE_LIST" | grep -q "azurerm_virtual_desktop_scaling_plan.sp"; then
                 echo "Import ScalingPlan $SP_NAME..."
                 terraform import -var-file="${{ env.TF_VARFILE }}" \
                   'azurerm_virtual_desktop_scaling_plan.sp[0]' "$SP_ID"
@@ -612,6 +675,42 @@ jobs:
           ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
         run: terraform apply -input=false -auto-approve "${{ env.TF_PLANFILE }}"
 
+      - name: "9b. Configuration Kerberos AADKERB (post-apply)"
+        if: inputs.operation == 'apply'
+        run: |
+          set -euo pipefail
+          SA_NAME="${{ steps.names.outputs.sa }}"
+
+          # Le SP Kerberos est cree automatiquement par Azure lors de l'activation
+          # de AADKERB sur le storage account. Il porte le nom du SA et le tag IsAadKerbStorageAccount.
+          KERB_SP_ID=$(az ad sp list \
+            --display-name "$SA_NAME" \
+            --query "[?contains(tags, 'IsAadKerbStorageAccount')].id" \
+            -o tsv 2>/dev/null || echo "")
+
+          if [ -z "$KERB_SP_ID" ]; then
+            echo "::warning::SP Kerberos non trouve pour $SA_NAME — a verifier manuellement dans Entra ID"
+            exit 0
+          fi
+
+          echo "SP Kerberos : $KERB_SP_ID"
+
+          # Activer kdc_enable_cloud_group_sids (requis pour que FSLogix utilise
+          # les SIDs des groupes Entra ID dans les profils)
+          EXISTING_TAGS=$(az ad sp show --id "$KERB_SP_ID" --query "tags" -o json)
+          if ! echo "$EXISTING_TAGS" | grep -q "kdc_enable_cloud_group_sids"; then
+            az ad sp update --id "$KERB_SP_ID" --add tags "kdc_enable_cloud_group_sids"
+            echo "Tag kdc_enable_cloud_group_sids ajoute"
+          else
+            echo "Tag kdc_enable_cloud_group_sids deja present"
+          fi
+
+          # Admin consent sur l'app Kerberos
+          KERB_APP_ID=$(az ad sp show --id "$KERB_SP_ID" --query "appId" -o tsv)
+          az ad app permission admin-consent --id "$KERB_APP_ID" \
+            && echo "Admin consent accorde" \
+            || echo "::warning::Admin consent echoue — effectuer manuellement : Entra ID > Applications d entreprise > $SA_NAME > Autorisations"
+
       - name: "9. Terraform Destroy"
         if: inputs.operation == 'destroy'
         working-directory: terraform-az-services/Automation_Services_Avd/HostPool
@@ -631,9 +730,12 @@ jobs:
             -target=azurerm_role_assignment.smb_contributor \
             -target=azurerm_role_assignment.vm_user_login \
             -target=azuread_group.users \
+            -target=azuread_group.devices \
             -target=azurerm_key_vault_secret.admin \
             -target=random_password.admin \
             -target=module.host_pool \
+            -target=module.private_endpoint \
             -target=module.subnet \
             -target=module.storage_account \
+            -target=azurerm_storage_share_directory.profils \
             -target=module.fileshare

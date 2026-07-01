@@ -12,7 +12,7 @@ data "azurerm_resource_group" "rg" {
 }
 
 module "host_pool" {
-  source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Avd/HostPool?ref=poc"
+  source = "git::https://github.com/servier-github/terraform-az-modules.git//Avd/HostPool?ref=poc"
 
   resource_group_name = data.azurerm_resource_group.rg.name
   location            = var.location
@@ -41,42 +41,69 @@ module "host_pool" {
 # "flux standard" (HLD section 9.5.1). VNET et RG cibles determines via la
 # table de correspondance SETTING+NETWORK_ZONE (local.network).
 module "subnet" {
-  source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Avd/Subnet?ref=poc"
+  source = "git::https://github.com/servier-github/terraform-az-modules.git//Avd/Subnet?ref=poc"
 
   resource_group_name  = local.network.resource_group_name
   virtual_network_name = local.network.virtual_network_name
   vnet_address_space   = local.network.vnet_address_space
   newbits              = local.network.newbits
 
-  subnet_name = local.subnet_name
-  nsg_name    = local.nsg_name
-
-  tags = local.common_tags
+  subnet_name      = local.subnet_name
+  route_table_name = local.network.route_table_name
 }
 
 # Stockage FSLogix : 1 Storage Account (Premium FileStorage) + 1 fileshare
 # "fslogix" par Host Pool, dans le meme Resource Group. Redondance derivee de
 # l environnement (local.storage_redundancy).
 module "storage_account" {
-  source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//StorageAccount?ref=poc"
+  source = "git::https://github.com/servier-github/terraform-az-modules.git//StorageAccount?ref=poc"
 
   resource_group_name              = data.azurerm_resource_group.rg.name
   storage_account_name             = local.storage_account_name
   storage_account_tier             = "Premium"
   storage_account_kind             = "FileStorage"
   storage_account_replication_type = local.storage_redundancy
+  enable_aadkerb                   = true
+  aadkerb_default_share_permission = "StorageFileDataSmbShareContributor"
 
   servier_environment = var.servier_environment
   APPLICATION_ID      = var.APPLICATION_ID
 }
 
 module "fileshare" {
-  source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Fileshare?ref=poc"
+  source = "git::https://github.com/servier-github/terraform-az-modules.git//Fileshare?ref=poc"
 
   storage_account_id = module.storage_account.storage_account_id
   fileshares         = ["fslogix"]
   APPLICATION_ID     = var.APPLICATION_ID
   quota_gb           = var.FSLOGIX_QUOTA_GB
+}
+
+# Repertoire FSLogix standard — FSLogix redirige les profils vers profils\<SID>\Profile
+resource "azurerm_storage_share_directory" "profils" {
+  name              = "profils"
+  storage_share_url = module.fileshare.fileshare_urls["fslogix"]
+}
+
+# Private Endpoint FSLogix — acces prive depuis le subnet AVD (HLD section 9)
+# La DNS zone privatelink.file.core.windows.net est hebergee dans GL50-RG006 (hub_subscription).
+module "private_endpoint" {
+  source = "git::https://github.com/servier-github/terraform-az-modules.git//PrivateEndpoint?ref=poc"
+
+  resource_group_name      = data.azurerm_resource_group.rg.name
+  resource_group_name_vnet = local.network.resource_group_name
+  network_name             = local.network.virtual_network_name
+  subnet_name              = local.subnet_name
+  endpoint_name                 = local.pe_name
+  custom_network_interface_name = local.nic_name
+  connection_resource_id   = module.storage_account.storage_account_id
+  resource_type            = "file"
+
+  providers = {
+    azurerm.hub_subscription = azurerm.hub_subscription
+  }
+
+  depends_on = [module.subnet, module.storage_account]
 }
 
 # ==============================================================================
@@ -120,6 +147,12 @@ resource "azurerm_key_vault_secret" "admin" {
 resource "azuread_group" "users" {
   display_name     = "CB-GO-AVD${local.host_pool_name}-USERS"
   mail_nickname    = "cb-go-avd${lower(local.host_pool_name)}-users"
+  security_enabled = true
+}
+
+resource "azuread_group" "devices" {
+  display_name     = "CB-GO-AVD${local.host_pool_name}-DEVICES"
+  mail_nickname    = "cb-go-avd${lower(local.host_pool_name)}-devices"
   security_enabled = true
 }
 
@@ -183,7 +216,7 @@ resource "azurerm_role_assignment" "dvd_user" {
 
 resource "azurerm_virtual_desktop_scaling_plan" "sp" {
   count               = local.avd_type == "Pooled" ? 1 : 0
-  name                = "${local.host_pool_name}-SP"
+  name                = local.scaling_plan_name
   location            = var.location
   resource_group_name = data.azurerm_resource_group.rg.name
   time_zone           = var.scaling_plan_time_zone
