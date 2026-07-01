@@ -491,11 +491,9 @@ jobs:
             echo "::add-mask::$KV_PW"
             echo "Secret '$SECRET_NAME' present dans le Key Vault '$KV_NAME' -> import..."
 
-            KV_ID=$(az keyvault show \
-              --name "$KV_NAME" \
-              --resource-group "$KV_RG" \
-              --query id -o tsv)
-            SECRET_ID="${KV_ID}/secrets/${SECRET_NAME}"
+            # azurerm_key_vault_secret attend l'URL KV (pas l'ARM resource ID)
+            KV_HOSTNAME=$(echo "$KV_NAME" | tr '[:upper:]' '[:lower:]')
+            SECRET_ID="https://${KV_HOSTNAME}.vault.azure.net/secrets/${SECRET_NAME}"
 
             if ! echo "$STATE_LIST" | grep -qF "$SECRET_ADDR"; then
               terraform import -var-file="${{ env.TF_VARFILE }}" "$SECRET_ADDR" "$SECRET_ID"
