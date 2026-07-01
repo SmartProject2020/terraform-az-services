@@ -528,6 +528,20 @@ jobs:
             echo "Groupe $GROUP_USERS_NAME absent — sera cree par Terraform."
           fi
 
+          # ── Groupe DEVICES Entra ID ───────────────────────────────────────
+          GROUP_DEVICES_NAME="CB-GO-AVD${HP_NAME}-DEVICES"
+          GROUP_DEVICES_ID=$(az ad group show --group "$GROUP_DEVICES_NAME" --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$GROUP_DEVICES_ID" ]; then
+            if ! echo "$STATE_LIST" | grep -qF "azuread_group.devices"; then
+              echo "Import groupe $GROUP_DEVICES_NAME..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" "azuread_group.devices" "/groups/${GROUP_DEVICES_ID}"
+            else
+              echo "Groupe $GROUP_DEVICES_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "Groupe $GROUP_DEVICES_NAME absent — sera cree par Terraform."
+          fi
+
           # ── AppGroup (Task #7) ────────────────────────────────────────────
           DAG_NAME="${HP_NAME}-DAG"
           DAG_EXISTS=$(az resource show \
@@ -600,6 +614,132 @@ jobs:
             fi
           else
             echo "Repertoire profils absent — sera cree par Terraform."
+          fi
+
+          # ── Storage Account FSLogix ───────────────────────────────────────
+          SA_ADDR="module.storage_account.azurerm_storage_account.storage_account"
+          SA_EXISTS=$(az resource show \
+            --resource-type "Microsoft.Storage/storageAccounts" \
+            --name "$SA_NAME" --resource-group "$RG_NAME" --subscription "$SUB" \
+            --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$SA_EXISTS" ]; then
+            SA_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Storage/storageAccounts/${SA_NAME}"
+            if ! echo "$STATE_LIST" | grep -qF "$SA_ADDR"; then
+              echo "Import Storage Account $SA_NAME..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" "$SA_ADDR" "$SA_ID"
+            else
+              echo "Storage Account $SA_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "Storage Account $SA_NAME absent — sera cree par Terraform."
+          fi
+
+          # ── Subnet + Route Table Association ──────────────────────────────
+          VER_PAD=$(printf "%02d" "${{ inputs.pool_version }}")
+          SUBNET_NAME=$(echo "${PLAQUE}-${SETTING}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SNET${VER_PAD}" | tr '[:lower:]' '[:upper:]')
+          NETWORK_KEY="${SETTING}-${{ inputs.network_zone }}"
+          case "$NETWORK_KEY" in
+            "PRD-standard") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET01" ;;
+            "PRD-critical") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET02" ;;
+            "NPR-standard") VNET_RG="EM50-NPR-AVDAZ-TST-RG01"; VNET_NAME="EM50-NPR-AVDAZ-VNET01" ;;
+            *)               echo "::warning::Combinaison SETTING+NETWORK_ZONE inconnue: $NETWORK_KEY"; VNET_RG=""; VNET_NAME="" ;;
+          esac
+          SNET_ADDR="module.subnet.azurerm_subnet.this"
+          SNET_ASSOC_ADDR="module.subnet.azurerm_subnet_route_table_association.this"
+          if [ -n "${VNET_RG:-}" ]; then
+            SNET_ID="/subscriptions/${SUB}/resourceGroups/${VNET_RG}/providers/Microsoft.Network/virtualNetworks/${VNET_NAME}/subnets/${SUBNET_NAME}"
+            SNET_EXISTS=$(az network vnet subnet show --ids "$SNET_ID" --query id -o tsv 2>/dev/null || echo "")
+            if [ -n "$SNET_EXISTS" ]; then
+              if ! echo "$STATE_LIST" | grep -qF "$SNET_ADDR"; then
+                echo "Import Subnet $SUBNET_NAME..."
+                terraform import -var-file="${{ env.TF_VARFILE }}" "$SNET_ADDR" "$SNET_ID"
+              else
+                echo "Subnet $SUBNET_NAME deja dans le state. Import ignore."
+              fi
+              if ! echo "$STATE_LIST" | grep -qF "$SNET_ASSOC_ADDR"; then
+                echo "Import Route Table Association pour $SUBNET_NAME..."
+                terraform import -var-file="${{ env.TF_VARFILE }}" "$SNET_ASSOC_ADDR" "$SNET_ID"
+              else
+                echo "Route Table Association deja dans le state. Import ignore."
+              fi
+            else
+              echo "Subnet $SUBNET_NAME absent — sera cree par Terraform."
+            fi
+          fi
+
+          # ── Fileshare FSLogix ─────────────────────────────────────────────
+          SHARE_ADDR='module.fileshare.azurerm_storage_share.share["fslogix"]'
+          SHARE_URL="https://${SA_NAME}.file.core.windows.net/${SHARE_FULL_NAME}"
+          SHARE_EXISTS=$(az storage share exists \
+            --name "$SHARE_FULL_NAME" --account-name "$SA_NAME" \
+            --auth-mode login --query exists -o tsv 2>/dev/null || echo "false")
+          if [ "$SHARE_EXISTS" = "true" ]; then
+            if ! echo "$STATE_LIST" | grep -qF 'module.fileshare.azurerm_storage_share.share'; then
+              echo "Import Fileshare $SHARE_FULL_NAME..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" "$SHARE_ADDR" "$SHARE_URL"
+            else
+              echo "Fileshare $SHARE_FULL_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "Fileshare $SHARE_FULL_NAME absent — sera cree par Terraform."
+          fi
+
+          # ── Role Assignments ──────────────────────────────────────────────
+          if [ -n "$GROUP_USERS_ID" ]; then
+            # vm_user_login : Virtual Machine User Login sur le RG
+            RA_VM_ADDR="azurerm_role_assignment.vm_user_login"
+            if ! echo "$STATE_LIST" | grep -qF "$RA_VM_ADDR"; then
+              RA_VM_ID=$(az role assignment list \
+                --scope "/subscriptions/${SUB}/resourceGroups/${RG_NAME}" \
+                --assignee "$GROUP_USERS_ID" \
+                --role "Virtual Machine User Login" \
+                --query "[0].id" -o tsv 2>/dev/null || echo "")
+              if [ -n "$RA_VM_ID" ]; then
+                echo "Import role assignment vm_user_login..."
+                terraform import -var-file="${{ env.TF_VARFILE }}" "$RA_VM_ADDR" "$RA_VM_ID"
+              else
+                echo "Role assignment vm_user_login absent — sera cree par Terraform."
+              fi
+            else
+              echo "Role assignment vm_user_login deja dans le state. Import ignore."
+            fi
+
+            # smb_contributor : Storage File Data SMB Share Contributor sur le SA
+            RA_SMB_ADDR="azurerm_role_assignment.smb_contributor"
+            if ! echo "$STATE_LIST" | grep -qF "$RA_SMB_ADDR"; then
+              SA_SCOPE="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Storage/storageAccounts/${SA_NAME}"
+              RA_SMB_ID=$(az role assignment list \
+                --scope "$SA_SCOPE" \
+                --assignee "$GROUP_USERS_ID" \
+                --role "Storage File Data SMB Share Contributor" \
+                --query "[0].id" -o tsv 2>/dev/null || echo "")
+              if [ -n "$RA_SMB_ID" ]; then
+                echo "Import role assignment smb_contributor..."
+                terraform import -var-file="${{ env.TF_VARFILE }}" "$RA_SMB_ADDR" "$RA_SMB_ID"
+              else
+                echo "Role assignment smb_contributor absent — sera cree par Terraform."
+              fi
+            else
+              echo "Role assignment smb_contributor deja dans le state. Import ignore."
+            fi
+
+            # dvd_user : Desktop Virtualization User sur l AppGroup
+            RA_DVD_ADDR="azurerm_role_assignment.dvd_user"
+            if [ -n "${DAG_ID:-}" ] && ! echo "$STATE_LIST" | grep -qF "$RA_DVD_ADDR"; then
+              RA_DVD_ID=$(az role assignment list \
+                --scope "$DAG_ID" \
+                --assignee "$GROUP_USERS_ID" \
+                --role "Desktop Virtualization User" \
+                --query "[0].id" -o tsv 2>/dev/null || echo "")
+              if [ -n "$RA_DVD_ID" ]; then
+                echo "Import role assignment dvd_user..."
+                terraform import -var-file="${{ env.TF_VARFILE }}" "$RA_DVD_ADDR" "$RA_DVD_ID"
+              else
+                echo "Role assignment dvd_user absent — sera cree par Terraform."
+              fi
+            else
+              echo "Role assignment dvd_user : AppGroup absent ou deja dans le state. Import ignore."
+            fi
           fi
 
           # ── Private Endpoint FSLogix ─────────────────────────────────────
