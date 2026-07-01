@@ -103,12 +103,6 @@ on:
         default: ""
         type: string
 
-      description:
-        description: "Description du Host Pool"
-        required: false
-        default: ""
-        type: string
-
       load_balancer_type:
         description: "Algorithme de repartition de charge"
         required: true
@@ -312,7 +306,7 @@ jobs:
           location                         = "${{ inputs.location }}"
           servier_environment              = "${SERVIER_ENV}"
           friendly_name                    = $(to_str_or_null "${{ inputs.friendly_name }}")
-          description                      = $(to_str_or_null "${{ inputs.description }}")
+          description                      = null
           load_balancer_type               = "${{ inputs.load_balancer_type }}"
           personal_desktop_assignment_type = $(to_str_or_null "${{ inputs.personal_desktop_assignment_type }}")
           maximum_sessions_allowed         = $(to_num_or_null "${{ inputs.maximum_sessions_allowed }}")
