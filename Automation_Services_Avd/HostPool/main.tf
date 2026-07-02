@@ -91,7 +91,7 @@ module "private_endpoint" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//PrivateEndpoint?ref=poc"
 
   resource_group_name      = azurerm_resource_group.rg.name
-  location                 = var.location
+  location                 = module.subnet.vnet_location
   resource_group_name_vnet = local.network.resource_group_name
   network_name             = local.network.virtual_network_name
   subnet_name              = local.subnet_name
