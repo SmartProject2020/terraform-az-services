@@ -22,12 +22,6 @@ variable "ENV" {
   type        = string
 }
 
-variable "RESOURCE_GROUP_INC" {
-  description = "Increment du Resource Group dedie au Host Pool (ex: 01, 02)"
-  type        = string
-  default     = "01"
-}
-
 variable "location" {
   description = "Region Azure"
   type        = string
@@ -69,14 +63,8 @@ variable "POOL_TYPE" {
 }
 
 variable "POOL_ID" {
-  description = "Identifiant metier du pool (ex: ADMSYS), utilise dans le nommage Host Pool/Workspace/App Group"
+  description = "Identifiant metier du pool incluant son increment (ex: ADMSYS1, ADMSYS2), utilise dans le nommage Host Pool/Workspace/App Group"
   type        = string
-}
-
-variable "POOL_VERSION" {
-  description = "Version/increment du pool, utilise comme suffixe numerique des ressources (ex: 1 -> 01)"
-  type        = number
-  default     = 1
 }
 
 # ==============================================================================
@@ -98,7 +86,7 @@ variable "description" {
 variable "load_balancer_type" {
   description = "Algorithme de repartition de charge : BreadthFirst, DepthFirst (Pooled) ou Persistent (Personal)"
   type        = string
-  default     = "BreadthFirst"
+  default     = "DepthFirst"
 }
 
 variable "personal_desktop_assignment_type" {
@@ -142,10 +130,9 @@ variable "registration_expiration_hours" {
 # "fslogix" par Host Pool, meme Resource Group. Redondance derivee de ENV.
 # ==============================================================================
 
-variable "FSLOGIX_QUOTA_GB" {
-  description = "Quota du fileshare fslogix (GB)"
+variable "NB_USERS" {
+  description = "Nombre d'utilisateurs du pool — sert a calculer le quota FSLogix (NB_USERS * 5 Go, minimum 100 Go)"
   type        = number
-  default     = 100
 }
 
 variable "HUB_SUBSCRIPTION_ID" {
@@ -172,12 +159,3 @@ variable "KV_RESOURCE_GROUP_NAME" {
 }
 
 
-# ==============================================================================
-# ScalingPlan — Personal uniquement (HLD 12.2)
-# ==============================================================================
-
-variable "scaling_plan_time_zone" {
-  description = "Fuseau horaire du ScalingPlan (Pooled uniquement). Valeurs Windows : ex. 'Romance Standard Time' (Paris), 'UTC'"
-  type        = string
-  default     = "Romance Standard Time"
-}

@@ -1,20 +1,21 @@
 # ==============================================================================
 # Root module : Automation_Services_Avd_HostPool
-# Gere : Host Pool AVD (+ token d'enregistrement) dans un Resource Group pre-existant
+# Gere : Resource Group dedie + Host Pool AVD complet
 #
-# Le Resource Group n'est pas gere ici — il est lu via data source.
-# Cela permet de deployer le Host Pool dans n'importe quelle region Azure
-# independamment de la region du Resource Group.
+# Le Resource Group est cree si absent, importe dans le state s'il existe deja.
+# Logique d'import dans step 8b du workflow (azurerm_resource_group.rg).
 # ==============================================================================
 
-data "azurerm_resource_group" "rg" {
-  name = local.rg_name
+resource "azurerm_resource_group" "rg" {
+  name     = local.rg_name
+  location = var.location
+  tags     = local.common_tags
 }
 
 module "host_pool" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Avd/HostPool?ref=poc"
 
-  resource_group_name = data.azurerm_resource_group.rg.name
+  resource_group_name = azurerm_resource_group.rg.name
   location            = var.location
   name                = local.host_pool_name
 
@@ -37,9 +38,8 @@ module "host_pool" {
   backup_policy       = local.backup_policy
 }
 
-# Subnet dedie au Host Pool (1 Host Pool = 1 subnet, HLD section 9) + NSG
-# "flux standard" (HLD section 9.5.1). VNET et RG cibles determines via la
-# table de correspondance SETTING+NETWORK_ZONE (local.network).
+# Subnet dedie au Host Pool (1 Host Pool = 1 subnet, HLD section 9)
+# VNET et RG cibles determines via la table de correspondance SETTING+NETWORK_ZONE.
 module "subnet" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Avd/Subnet?ref=poc"
 
@@ -53,12 +53,11 @@ module "subnet" {
 }
 
 # Stockage FSLogix : 1 Storage Account (Premium FileStorage) + 1 fileshare
-# "fslogix" par Host Pool, dans le meme Resource Group. Redondance derivee de
-# l environnement (local.storage_redundancy).
+# "fslogix" par Host Pool, dans le meme Resource Group.
 module "storage_account" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//StorageAccount?ref=poc"
 
-  resource_group_name              = data.azurerm_resource_group.rg.name
+  resource_group_name              = azurerm_resource_group.rg.name
   storage_account_name             = local.storage_account_name
   storage_account_tier             = "Premium"
   storage_account_kind             = "FileStorage"
@@ -76,7 +75,7 @@ module "fileshare" {
   storage_account_id = module.storage_account.storage_account_id
   fileshares         = ["fslogix"]
   APPLICATION_ID     = var.APPLICATION_ID
-  quota_gb           = var.FSLOGIX_QUOTA_GB
+  quota_gb           = local.fslogix_quota_gb
 }
 
 # Repertoire FSLogix standard — FSLogix redirige les profils vers profils\<SID>\Profile
@@ -90,7 +89,7 @@ resource "azurerm_storage_share_directory" "profils" {
 module "private_endpoint" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//PrivateEndpoint?ref=poc"
 
-  resource_group_name      = data.azurerm_resource_group.rg.name
+  resource_group_name      = azurerm_resource_group.rg.name
   resource_group_name_vnet = local.network.resource_group_name
   network_name             = local.network.virtual_network_name
   subnet_name              = local.subnet_name
@@ -108,12 +107,7 @@ module "private_endpoint" {
 
 # ==============================================================================
 # Mot de passe administrateur local — genere une fois a la creation du pool,
-# stocke dans le Key Vault AVD partage. Lu par Automation_Services_Avd_SessionHost
-# via terraform_remote_state (outputs.kv_id).
-#
-# Import sur un pool existant (step 8b du workflow) :
-#   random_password.admin      -> terraform import ... ",$PASSWORD_VALUE"
-#   azurerm_key_vault_secret.admin -> terraform import ... "<KV_ID>/secrets/<SECRET_NAME>"
+# stocke dans le Key Vault AVD partage.
 # ==============================================================================
 
 data "azurerm_key_vault" "avd" {
@@ -135,29 +129,23 @@ resource "azurerm_key_vault_secret" "admin" {
 }
 
 # ==============================================================================
-# Task #6 — Groupes Entra ID + RBAC par pool
-#
-# Les SPs Microsoft AVD sont identifies par leur App ID (fixe, identique dans
-# tous les tenants) — le provider azuread resout l'Object ID tenant-specifique.
-#
-# Role non attribue ici : Desktop Virtualization User sur AppGroup
-# -> defere a Task #7 (AppGroup cree dans Automation_Services_Avd_Workspace)
+# Groupes Entra ID + RBAC par pool
 # ==============================================================================
 
 resource "azuread_group" "users" {
-  display_name     = "CB-GO-AVD${local.host_pool_name}-USERS"
-  mail_nickname    = "cb-go-avd${lower(local.host_pool_name)}-users"
+  display_name     = "EM-GA-AVD-AVD${local.host_pool_name}"
+  mail_nickname    = "em-ga-avd-avd${lower(local.host_pool_name)}"
   security_enabled = true
 }
 
 resource "azuread_group" "devices" {
-  display_name     = "CB-GO-AVD${local.host_pool_name}-DEVICES"
-  mail_nickname    = "cb-go-avd${lower(local.host_pool_name)}-devices"
+  display_name     = "INTUNE-WIN11-AVD-AVD${local.host_pool_name}"
+  mail_nickname    = "intune-win11-avd-avd${lower(local.host_pool_name)}"
   security_enabled = true
 }
 
 resource "azurerm_role_assignment" "vm_user_login" {
-  scope                = data.azurerm_resource_group.rg.id
+  scope                = azurerm_resource_group.rg.id
   role_definition_name = "Virtual Machine User Login"
   principal_id         = azuread_group.users.object_id
 }
@@ -168,27 +156,21 @@ resource "azurerm_role_assignment" "smb_contributor" {
   principal_id         = azuread_group.users.object_id
 }
 
-# Desktop Virtualization Power On Off Contributor pour AVD SP et WVD ARM Provider SP :
-# assignment manuel one-shot au niveau subscription (couvre tous les pools).
+# Desktop Virtualization Power On Off Contributor : assignment manuel one-shot
+# au niveau subscription (couvre tous les pools).
 # az role assignment create --role "Desktop Virtualization Power On Off Contributor" \
 #   --assignee "9cdead84-a844-4324-93f2-b2e6bb768d07" --scope "/subscriptions/<SUB_ID>"
 # az role assignment create --role "Desktop Virtualization Power On Off Contributor" \
 #   --assignee "50e95039-b200-4007-bc97-8d5790743a63" --scope "/subscriptions/<SUB_ID>"
 
 # ==============================================================================
-# Task #7 — AppGroup + Workspace + ScalingPlan (Personal uniquement)
-#
-# Nommage HLD :
-#   App Group   : <POOL_NAME>-DAG  (ex: MTEST1-DAG)
-#   Workspace   : <POOL_NAME>      (ex: MTEST1) — 1 workspace par pool
-#   Scaling Plan: <POOL_NAME>-SP   — Personal uniquement (HLD 12.2)
-#                 MultiSession = taille statique, pas de ScalingPlan
+# AppGroup + Workspace + ScalingPlan
 # ==============================================================================
 
 resource "azurerm_virtual_desktop_application_group" "dag" {
   name                = "${local.host_pool_name}-DAG"
   location            = var.location
-  resource_group_name = data.azurerm_resource_group.rg.name
+  resource_group_name = azurerm_resource_group.rg.name
   host_pool_id        = module.host_pool.host_pool_id
   type                = "Desktop"
 
@@ -198,7 +180,7 @@ resource "azurerm_virtual_desktop_application_group" "dag" {
 resource "azurerm_virtual_desktop_workspace" "ws" {
   name                = local.host_pool_name
   location            = var.location
-  resource_group_name = data.azurerm_resource_group.rg.name
+  resource_group_name = azurerm_resource_group.rg.name
 
   tags = local.common_tags
 }
@@ -218,8 +200,8 @@ resource "azurerm_virtual_desktop_scaling_plan" "sp" {
   count               = local.avd_type == "Pooled" ? 1 : 0
   name                = local.scaling_plan_name
   location            = var.location
-  resource_group_name = data.azurerm_resource_group.rg.name
-  time_zone           = var.scaling_plan_time_zone
+  resource_group_name = azurerm_resource_group.rg.name
+  time_zone           = local.scaling_plan_time_zone
 
   host_pool {
     hostpool_id          = module.host_pool.host_pool_id

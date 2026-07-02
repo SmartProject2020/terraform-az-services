@@ -1,6 +1,6 @@
 output "resource_group_name" {
   description = "Nom du Resource Group du Host Pool"
-  value       = data.azurerm_resource_group.rg.name
+  value       = azurerm_resource_group.rg.name
 }
 
 output "host_pool_id" {

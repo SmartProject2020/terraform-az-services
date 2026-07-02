@@ -61,12 +61,6 @@ on:
         type: choice
         options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
 
-      resource_group_inc:
-        description: "Increment Resource Group du Host Pool (ex: 01)"
-        required: true
-        default: "01"
-        type: string
-
       network_zone:
         description: "Zone reseau du subnet dedie au Host Pool"
         required: true
@@ -84,14 +78,8 @@ on:
         options: [M, P]
 
       pool_id:
-        description: "Identifiant metier du pool (ex: ADMSYS)"
+        description: "Identifiant metier du pool incluant son increment (ex: ADMSYS1, ADMSYS2)"
         required: true
-        type: string
-
-      pool_version:
-        description: "Version/increment du pool (suffixe du nom)"
-        required: false
-        default: "1"
         type: string
 
       # ------------------------------------------------------------------
@@ -106,9 +94,9 @@ on:
       load_balancer_type:
         description: "Algorithme de repartition de charge"
         required: true
-        default: "BreadthFirst"
+        default: "DepthFirst"
         type: choice
-        options: [BreadthFirst, DepthFirst, Persistent]
+        options: [DepthFirst, BreadthFirst, Persistent]
 
       personal_desktop_assignment_type:
         description: "Mode d'attribution (Personal uniquement)"
@@ -150,11 +138,11 @@ on:
 
       # ------------------------------------------------------------------
       # Stockage FSLogix (1 Storage Account + 1 fileshare "fslogix" par Host Pool)
+      # Quota calcule automatiquement : NB_USERS * 5 Go (minimum 100 Go)
       # ------------------------------------------------------------------
-      fslogix_quota_gb:
-        description: "Quota du fileshare fslogix (GB)"
-        required: false
-        default: "100"
+      nb_users:
+        description: "Nombre d'utilisateurs du pool (quota FSLogix = nb_users * 5 Go, min 100 Go)"
+        required: true
         type: string
 
       # ------------------------------------------------------------------
@@ -182,11 +170,6 @@ on:
         required: true
         type: string
 
-      scaling_plan_time_zone:
-        description: "Fuseau horaire du ScalingPlan Pooled (valeur Windows, ex: 'Romance Standard Time' pour Paris)"
-        required: false
-        default: "Romance Standard Time"
-        type: string
 
 permissions:
   id-token: write
@@ -194,24 +177,22 @@ permissions:
 
 jobs:
   terraform:
-    name: "Terraform ${{ inputs.operation }} - ${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }} - ${{ inputs.pool_type }}${{ inputs.pool_id }}${{ inputs.pool_version }}"
+    name: "Terraform ${{ inputs.operation }} - ${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }} - ${{ inputs.pool_type }}${{ inputs.pool_id }}"
     runs-on: ubuntu-latest
 
     env:
-      TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-hostpool-${{ inputs.pool_type }}${{ inputs.pool_id }}${{ inputs.pool_version }}"
-      TF_VARFILE:   "vars/${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-${{ inputs.pool_type }}${{ inputs.pool_id }}${{ inputs.pool_version }}.tfvars"
-      TF_PLANFILE:  "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-${{ inputs.pool_type }}${{ inputs.pool_id }}${{ inputs.pool_version }}.tfplan"
+      TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-hostpool-${{ inputs.pool_type }}${{ inputs.pool_id }}"
+      TF_VARFILE:   "vars/${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-${{ inputs.pool_type }}${{ inputs.pool_id }}.tfvars"
+      TF_PLANFILE:  "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-${{ inputs.pool_type }}${{ inputs.pool_id }}.tfplan"
 
       TF_VAR_PLAQUE:             "${{ inputs.plaque }}"
       TF_VAR_SETTING:            "${{ inputs.setting }}"
       TF_VAR_ENV:                "${{ inputs.env }}"
       TF_VAR_APPLICATION_ID:     "${{ inputs.application_id }}"
-      TF_VAR_RESOURCE_GROUP_INC: "${{ inputs.resource_group_inc }}"
       TF_VAR_NETWORK_ZONE:       "${{ inputs.network_zone }}"
       TF_VAR_POOL_TYPE:          "${{ inputs.pool_type }}"
       TF_VAR_POOL_ID:            "${{ inputs.pool_id }}"
-      TF_VAR_POOL_VERSION:       "${{ inputs.pool_version }}"
-      TF_VAR_FSLOGIX_QUOTA_GB:   "${{ inputs.fslogix_quota_gb }}"
+      TF_VAR_NB_USERS:           "${{ inputs.nb_users }}"
       TF_VAR_KV_NAME:                "${{ inputs.kv_name }}"
       TF_VAR_KV_RESOURCE_GROUP_NAME: "${{ inputs.kv_resource_group_name }}"
       TF_VAR_HUB_SUBSCRIPTION_ID:   "${{ inputs.hub_subscription_id }}"
@@ -314,7 +295,6 @@ jobs:
           validate_environment             = false
           custom_rdp_properties            = $(to_str_or_null "${{ inputs.custom_rdp_properties }}")
           registration_expiration_hours    = ${{ inputs.registration_expiration_hours }}
-          scaling_plan_time_zone           = "${{ inputs.scaling_plan_time_zone }}"
           EOF
 
           echo "----- ${{ env.TF_VARFILE }} -----"
@@ -379,12 +359,11 @@ jobs:
         id: names
         run: |
           set -euo pipefail
-          VER_PAD=$(printf "%02d" "${{ inputs.pool_version }}")
-          RG=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-RG${{ inputs.resource_group_inc }}" | tr '[:lower:]' '[:upper:]')
-          HP=$(echo "${{ inputs.pool_type }}${{ inputs.pool_id }}${{ inputs.pool_version }}" | tr '[:lower:]' '[:upper:]')
-          SA=$(echo "${{ inputs.plaque }}${{ inputs.setting }}${{ inputs.pool_type }}${{ inputs.pool_id }}sta${VER_PAD}" | tr '[:upper:]' '[:lower:]')
-          PE=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-PE${VER_PAD}" | tr '[:lower:]' '[:upper:]')
-          SP=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SP${VER_PAD}" | tr '[:lower:]' '[:upper:]')
+          RG=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-${{ inputs.env }}-RG01" | tr '[:lower:]' '[:upper:]')
+          HP=$(echo "${{ inputs.pool_type }}${{ inputs.pool_id }}" | tr '[:lower:]' '[:upper:]')
+          SA=$(echo "${{ inputs.plaque }}${{ inputs.setting }}${{ inputs.pool_type }}${{ inputs.pool_id }}sta01" | tr '[:upper:]' '[:lower:]')
+          PE=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-PE01" | tr '[:lower:]' '[:upper:]')
+          SP=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SP01" | tr '[:lower:]' '[:upper:]')
           echo "rg=$RG" >> "$GITHUB_OUTPUT"
           echo "hp=$HP" >> "$GITHUB_OUTPUT"
           echo "sa=$SA" >> "$GITHUB_OUTPUT"
@@ -413,7 +392,7 @@ jobs:
           RG_NAME="${{ steps.names.outputs.rg }}"
           HP_NAME="${{ steps.names.outputs.hp }}"
 
-          RG_ADDR="module.rg.azurerm_resource_group.rg"
+          RG_ADDR="azurerm_resource_group.rg"
           HP_ADDR="module.host_pool.azurerm_virtual_desktop_host_pool.this"
           REG_ADDR="module.host_pool.azurerm_virtual_desktop_host_pool_registration_info.this"
 
@@ -423,10 +402,19 @@ jobs:
 
           STATE_LIST=$(terraform state list 2>/dev/null || echo "")
 
-          # ── Migration : RG etait gere, maintenant data source — purge state ──
-          if echo "$STATE_LIST" | grep -qF "$RG_ADDR"; then
-            echo "RG present dans le state (ancienne version) -> suppression sans destroy Azure"
-            terraform state rm "$RG_ADDR" || true
+          # ── Resource Group — cree si absent, importe si existant ─────────────
+          RG_EXISTS=$(az group show --name "$RG_NAME" --subscription "$SUB" \
+            --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$RG_EXISTS" ]; then
+            if ! echo "$STATE_LIST" | grep -qF "$RG_ADDR"; then
+              echo "Import Resource Group $RG_NAME..."
+              terraform import -var-file="${{ env.TF_VARFILE }}" "$RG_ADDR" "$RG_EXISTS"
+              STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+            else
+              echo "Resource Group $RG_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "Resource Group $RG_NAME absent — sera cree par Terraform."
           fi
 
           # ── Host Pool ────────────────────────────────────────────────────────
@@ -629,8 +617,7 @@ jobs:
           fi
 
           # ── Subnet + Route Table Association ──────────────────────────────
-          VER_PAD=$(printf "%02d" "${{ inputs.pool_version }}")
-          SUBNET_NAME=$(echo "${PLAQUE}-${SETTING}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SNET${VER_PAD}" | tr '[:lower:]' '[:upper:]')
+          SUBNET_NAME=$(echo "${PLAQUE}-${SETTING}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SNET01" | tr '[:lower:]' '[:upper:]')
           NETWORK_KEY="${SETTING}-${{ inputs.network_zone }}"
           case "$NETWORK_KEY" in
             "PRD-standard") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET01" ;;

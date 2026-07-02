@@ -1,9 +1,10 @@
 locals {
   # Conventions de nommage
-  rg_name = upper("${var.PLAQUE}-${var.SETTING}-${var.APPLICATION_ID}-${var.ENV}-RG${var.RESOURCE_GROUP_INC}")
+  # RG : {PLAQUE}-{SETTING}-{POOL_TYPE}{POOL_ID}-{ENV}-RG01 (1 RG par pool, suffixe fixe)
+  rg_name = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-${var.ENV}-RG01")
 
-  # Convention HLD v0.1 : <M|P><PoolID><version>  (ex: MADMSYS1)
-  host_pool_name = upper("${var.POOL_TYPE}${var.POOL_ID}${var.POOL_VERSION}")
+  # Host Pool : {POOL_TYPE}{POOL_ID} — POOL_ID inclut l'increment (ex: ADMSYS1)
+  host_pool_name = upper("${var.POOL_TYPE}${var.POOL_ID}")
 
   # M = Multisession -> Pooled / P = Personnel -> Personal (cf. TAD section 6.1)
   avd_type = var.POOL_TYPE == "M" ? "Pooled" : "Personal"
@@ -43,12 +44,12 @@ locals {
   network_key = "${var.SETTING}-${var.NETWORK_ZONE}"
 
   # Acces direct (sans lookup/default) : si la combinaison SETTING-NETWORK_ZONE
-  # n'existe pas encore (ex: NPR-critical, *-POC), Terraform echoue avec un
-  # message explicite mentionnant la cle manquante.
+  # n'existe pas encore, Terraform echoue avec un message explicite.
   network = local.network_lookup[local.network_key]
 
-  # Convention : {PLAQUE}-{SETTING}-{POOL_TYPE}{POOL_ID}-SNET{NN}
-  subnet_name = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-SNET${format("%02d", var.POOL_VERSION)}")
+  # Convention : {PLAQUE}-{SETTING}-{POOL_TYPE}{POOL_ID}-SNET01
+  # 1 subnet par pool -> suffixe toujours 01
+  subnet_name = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-SNET01")
 
   # ============================================================================
   # Stockage FSLogix — 1 Storage Account (Premium FileStorage) + 1 fileshare
@@ -56,15 +57,29 @@ locals {
   # ============================================================================
   storage_redundancy = var.ENV == "PRD" ? "ZRS" : "LRS"
 
-  # Convention : {PLAQUE}{SETTING}{POOL_TYPE}{POOL_ID}sta{NN}  (<=24 chars, lowercase)
-  storage_account_name = lower("${var.PLAQUE}${var.SETTING}${var.POOL_TYPE}${var.POOL_ID}sta${format("%02d", var.POOL_VERSION)}")
+  # Convention : {plaque}{setting}{pool_type}{pool_id}sta01  (<=24 chars, lowercase)
+  # 1 storage account par pool -> suffixe toujours 01
+  storage_account_name = lower("${var.PLAQUE}${var.SETTING}${var.POOL_TYPE}${var.POOL_ID}sta01")
 
-  # Nommage Private Endpoint et NIC : {PLAQUE}-{SETTING}-{POOL_TYPE}{POOL_ID}-PE/NIC{NN}
-  pe_name  = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-PE${format("%02d", var.POOL_VERSION)}")
-  nic_name = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-NIC${format("%02d", var.POOL_VERSION)}")
+  # Quota FSLogix : NB_USERS * 5 Go, minimum 100 Go (contrainte Premium FileStorage)
+  fslogix_quota_gb = max(var.NB_USERS * 5, 100)
 
-  # Scaling Plan : {PLAQUE}-{SETTING}-{POOL_TYPE}{POOL_ID}-SP{NN}  (Pooled uniquement)
-  scaling_plan_name = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-SP${format("%02d", var.POOL_VERSION)}")
+  # Nommage Private Endpoint et NIC : suffixe toujours 01 (1 PE par pool)
+  pe_name  = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-PE01")
+  nic_name = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-NIC01")
+
+  # Scaling Plan : suffixe toujours 01 (1 SP par pool, Pooled uniquement)
+  scaling_plan_name = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-SP01")
+
+  # Fuseau horaire du ScalingPlan derive de la plaque (valeurs Windows timezone)
+  # AM50 et AP50 : a confirmer avec les equipes regionales
+  scaling_plan_timezone_lookup = {
+    "EM50" = "Romance Standard Time"
+    "GL50" = "Romance Standard Time"
+    "AM50" = "Eastern Standard Time"
+    "AP50" = "Singapore Standard Time"
+  }
+  scaling_plan_time_zone = lookup(local.scaling_plan_timezone_lookup, var.PLAQUE, "Romance Standard Time")
 
   # ============================================================================
   # Key Vault AVD partage (1 par subscription/env — APPLICATION_ID fixe AVD00)
@@ -74,14 +89,11 @@ locals {
   kv_name                = upper(var.KV_NAME != null && var.KV_NAME != "" ? var.KV_NAME : "${var.PLAQUE}-${var.SETTING}-AVD00-KV01")
   kv_resource_group_name = upper(var.KV_RESOURCE_GROUP_NAME != null && var.KV_RESOURCE_GROUP_NAME != "" ? var.KV_RESOURCE_GROUP_NAME : "${var.PLAQUE}-${var.SETTING}-AVD00-${var.SETTING}-RG01")
 
-  common_tags = merge(
-    data.azurerm_resource_group.rg.tags,
-    {
-      "managed-by"          = "terraform"
-      "module"              = "avd-hostpool"
-      "application-id"      = var.APPLICATION_ID
-      "backup-policy"       = local.backup_policy
-      "servier-environment" = var.servier_environment
-    }
-  )
+  common_tags = {
+    "managed-by"          = "terraform"
+    "module"              = "avd-hostpool"
+    "application-id"      = var.APPLICATION_ID
+    "backup-policy"       = local.backup_policy
+    "servier-environment" = var.servier_environment
+  }
 }
