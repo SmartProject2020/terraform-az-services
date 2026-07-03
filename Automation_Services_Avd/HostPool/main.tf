@@ -66,6 +66,11 @@ module "storage_account" {
   enable_aadkerb                   = true
   aadkerb_default_share_permission = "StorageFileDataSmbShareContributor"
 
+  # Billing model V2 : IOPS + bandwidth provisionnees independamment de la capacite
+  provisioned_billing_model_version = "V2"
+  smb_multichannel_enabled          = true
+  share_soft_delete_days            = 7
+
   servier_environment = var.servier_environment
   APPLICATION_ID      = var.APPLICATION_ID
 }
@@ -73,10 +78,12 @@ module "storage_account" {
 module "fileshare" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Fileshare?ref=poc"
 
-  storage_account_id = module.storage_account.storage_account_id
-  fileshares         = ["fslogix"]
-  APPLICATION_ID     = var.APPLICATION_ID
-  quota_gb           = local.fslogix_quota_gb
+  storage_account_id          = module.storage_account.storage_account_id
+  fileshares                  = ["fslogix"]
+  APPLICATION_ID              = var.APPLICATION_ID
+  quota_gb                    = local.fslogix_quota_gb
+  provisioned_iops            = local.fslogix_provisioned_iops
+  # bandwidth null = minimum Azure (125 MiB/s) — suffisant pour FSLogix
 }
 
 # Repertoire FSLogix standard — FSLogix redirige les profils vers profils\<SID>\Profile
