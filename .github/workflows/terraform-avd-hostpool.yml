@@ -791,39 +791,36 @@ jobs:
 
       - name: "9b. Configuration Kerberos AADKERB (post-apply)"
         if: inputs.operation == 'apply'
+        env:
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_CLIENT_ID: ${{ secrets[steps.routing.outputs.secret] }}
         run: |
           set -euo pipefail
           SA_NAME="${{ steps.names.outputs.sa }}"
+          # L App Registration AADKERB est cree automatiquement par Azure avec le display name :
+          # "[Storage Account] <sa_name>.file.core.windows.net"
+          APP_NAME="[Storage Account] ${SA_NAME}.file.core.windows.net"
 
-          # Le SP Kerberos est cree automatiquement par Azure lors de l'activation
-          # de AADKERB sur le storage account. Il porte le nom du SA et le tag IsAadKerbStorageAccount.
-          KERB_SP_ID=$(az ad sp list \
-            --display-name "$SA_NAME" \
-            --query "[?contains(tags, 'IsAadKerbStorageAccount')].id" \
-            -o tsv 2>/dev/null || echo "")
+          APP_ID=$(az ad app list \
+            --display-name "$APP_NAME" \
+            --query "[0].id" -o tsv 2>/dev/null || echo "")
 
-          if [ -z "$KERB_SP_ID" ]; then
-            echo "::warning::SP Kerberos non trouve pour $SA_NAME — a verifier manuellement dans Entra ID"
+          if [ -z "$APP_ID" ]; then
+            echo "::warning::App Registration '$APP_NAME' non trouvee — AADKERB pas encore actif ou permissions insuffisantes"
             exit 0
           fi
 
-          echo "SP Kerberos : $KERB_SP_ID"
+          echo "App Registration AADKERB trouvee : $APP_ID"
 
-          # Activer kdc_enable_cloud_group_sids (requis pour que FSLogix utilise
-          # les SIDs des groupes Entra ID dans les profils)
-          EXISTING_TAGS=$(az ad sp show --id "$KERB_SP_ID" --query "tags" -o json)
-          if ! echo "$EXISTING_TAGS" | grep -q "kdc_enable_cloud_group_sids"; then
-            az ad sp update --id "$KERB_SP_ID" --add tags "kdc_enable_cloud_group_sids"
-            echo "Tag kdc_enable_cloud_group_sids ajoute"
+          # Tag kdc_enable_cloud_group_sids : requis pour que les SIDs de groupes Entra ID
+          # soient inclus dans les tickets Kerberos (FSLogix multi-user via groupes)
+          CURRENT_TAGS=$(az ad app show --id "$APP_ID" --query "tags" -o json 2>/dev/null || echo "[]")
+          if ! echo "$CURRENT_TAGS" | grep -q "kdc_enable_cloud_group_sids"; then
+            az ad app update --id "$APP_ID" --set "tags=[\"kdc_enable_cloud_group_sids\"]"
+            echo "Tag kdc_enable_cloud_group_sids configure sur $APP_NAME"
           else
             echo "Tag kdc_enable_cloud_group_sids deja present"
           fi
-
-          # Admin consent sur l'app Kerberos
-          KERB_APP_ID=$(az ad sp show --id "$KERB_SP_ID" --query "appId" -o tsv)
-          az ad app permission admin-consent --id "$KERB_APP_ID" \
-            && echo "Admin consent accorde" \
-            || echo "::warning::Admin consent echoue — effectuer manuellement : Entra ID > Applications d entreprise > $SA_NAME > Autorisations"
 
       - name: "9. Terraform Destroy"
         if: inputs.operation == 'destroy'

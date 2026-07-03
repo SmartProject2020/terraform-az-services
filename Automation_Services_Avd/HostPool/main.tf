@@ -84,33 +84,6 @@ module "fileshare" {
   quota_gb           = local.fslogix_quota_gb
 }
 
-# ==============================================================================
-# App Registration AADKERB — tag kdc_enable_cloud_group_sids
-# Azure cree automatiquement une App Registration "[Storage Account] <sa>.file.core.windows.net"
-# quand enable_aadkerb=true. Le tag kdc_enable_cloud_group_sids est requis pour que
-# les groupes Entra ID (pas uniquement les users) soient inclus dans les tickets Kerberos
-# (cf. manifest Entra ID -> tags: ["kdc_enable_cloud_group_sids"]).
-# ==============================================================================
-resource "terraform_data" "sa_aadkerb_cloud_group_sids" {
-  triggers_replace = [module.storage_account.storage_account_id]
-
-  provisioner "local-exec" {
-    interpreter = ["bash", "-c"]
-    command     = <<-EOT
-      APP_NAME="[Storage Account] ${local.storage_account_name}.file.core.windows.net"
-      APP_ID=$(az ad app list --display-name "$APP_NAME" --query "[0].id" -o tsv 2>/dev/null || echo "")
-      if [ -n "$APP_ID" ]; then
-        az ad app update --id "$APP_ID" --set "tags=[\"kdc_enable_cloud_group_sids\"]"
-        echo "Tag kdc_enable_cloud_group_sids configure sur $APP_NAME ($APP_ID)"
-      else
-        echo "::warning::App Registration '$APP_NAME' non trouvee — tag non configure"
-      fi
-    EOT
-  }
-
-  depends_on = [module.storage_account]
-}
-
 # Repertoire FSLogix standard — FSLogix redirige les profils vers profils\<SID>\Profile
 resource "azurerm_storage_share_directory" "profils" {
   name              = "profils"
