@@ -64,10 +64,6 @@ locals {
   # Quota FSLogix : NB_USERS * 5 Go, minimum 100 Go (contrainte Premium FileStorage)
   fslogix_quota_gb = max(var.NB_USERS * 5, 100)
 
-  # IOPS FSLogix V2 : 3 IOPS/user (charge bureautique standard), minimum Azure 3000
-  # V2 facture IOPS + bandwidth independamment de la capacite
-  fslogix_provisioned_iops = max(var.NB_USERS * 3, 3000)
-
   # Nommage Private Endpoint et NIC : suffixe toujours 01 (1 PE par pool)
   pe_name  = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-PE01")
   nic_name = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-NIC01")

@@ -78,12 +78,10 @@ module "storage_account" {
 module "fileshare" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//Fileshare?ref=poc"
 
-  storage_account_id          = module.storage_account.storage_account_id
-  fileshares                  = ["fslogix"]
-  APPLICATION_ID              = var.APPLICATION_ID
-  quota_gb                    = local.fslogix_quota_gb
-  provisioned_iops            = local.fslogix_provisioned_iops
-  # bandwidth null = minimum Azure (125 MiB/s) — suffisant pour FSLogix
+  storage_account_id = module.storage_account.storage_account_id
+  fileshares         = ["fslogix"]
+  APPLICATION_ID     = var.APPLICATION_ID
+  quota_gb           = local.fslogix_quota_gb
 }
 
 # Repertoire FSLogix standard — FSLogix redirige les profils vers profils\<SID>\Profile
