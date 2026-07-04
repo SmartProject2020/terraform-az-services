@@ -216,7 +216,7 @@ jobs:
       - name: "2. Checkout terraform-az-services"
         uses: actions/checkout@v4
         with:
-          repository: servier-github/terraform-az-services
+          repository: ${{ github.repository }}
           ref:        ${{ github.ref_name }}
           token:      ${{ steps.app-token.outputs.token }}
           path:       terraform-az-services
@@ -580,7 +580,7 @@ jobs:
             -H "Authorization: Bearer ${{ steps.app-token.outputs.token }}" \
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/json" \
-            "https://api.github.com/repos/servier-github/terraform-az-services/actions/workflows/terraform-register-fileshare.yml/dispatches" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/terraform-register-fileshare.yml/dispatches" \
             -d "{
               \"ref\": \"${{ github.ref_name }}\",
               \"inputs\": {
