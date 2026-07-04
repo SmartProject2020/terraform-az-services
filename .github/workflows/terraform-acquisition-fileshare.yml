@@ -111,6 +111,13 @@ on:
         default: "France Central"
         type: string
 
+      enable_defender:
+        description: "Activer Microsoft Defender for Storage (scan malware + detection donnees sensibles)"
+        required: false
+        type: choice
+        options: ["true", "false"]
+        default: "true"
+
       terraform_version:
         description: "Version Terraform"
         required: false
@@ -140,6 +147,7 @@ jobs:
       TF_VAR_STORAGE_ACCOUNT_INC:              "${{ inputs.storage_account_inc }}"
       TF_VAR_STORAGE_ACCOUNT_KIND:             "${{ inputs.storage_account_kind }}"
       TF_VAR_STORAGE_ACCOUNT_REPLICATION_TYPE: "${{ inputs.storage_account_replication_type }}"
+      TF_VAR_enable_defender:                  "${{ inputs.enable_defender }}"
       # STORAGE_ACCOUNT_TIER : dérivé à l'étape 6 (Standard/Premium selon kind)
       # STORAGE_ACCOUNT_ACCESS_TIER : fixe Hot (via tfvars)
 
@@ -296,8 +304,47 @@ jobs:
           mkdir -p vars
 
           SERVIER_ENV="${{ inputs.servier_environment }}"
-          FILESHARES='${{ inputs.fileshares }}'
           QUOTA="${{ inputs.quota_gb }}"
+
+          # ── Fusion fileshares : input + existants sur le SA ──────────────────
+          PLAQUE="${{ inputs.plaque }}"
+          ENV="${{ inputs.env }}"
+          APPLICATION_ID="${{ inputs.application_id }}"
+          SA_INC="${{ inputs.storage_account_inc }}"
+          RG_INC="${{ inputs.resource_group_inc }}"
+          SETTING="${{ inputs.setting }}"
+          SUB="${{ inputs.subscription_id }}"
+
+          SA_NAME=$(echo "${PLAQUE}${ENV}${APPLICATION_ID}sta${SA_INC}" | tr '[:upper:]' '[:lower:]')
+          RG_NAME=$(echo "${PLAQUE}-${SETTING}-${APPLICATION_ID}-${ENV}-RG${RG_INC}" | tr '[:lower:]' '[:upper:]')
+          APP_PREFIX=$(echo "${APPLICATION_ID}" | tr '[:upper:]' '[:lower:]')
+
+          # Récupérer les fileshares existants sur le SA (si le SA existe)
+          EXISTING_SHARES=""
+          if az storage account show --name "$SA_NAME" --subscription "$SUB" --query "id" -o tsv 2>/dev/null; then
+            EXISTING_SHARES=$(az storage share-rm list \
+              --storage-account "$SA_NAME" \
+              --resource-group "$RG_NAME" \
+              --subscription "$SUB" \
+              --query "[].name" -o tsv 2>/dev/null \
+              | sed "s/^${APP_PREFIX}-//" \
+              || echo "")
+          fi
+
+          # Fusionner input + existants (union, sans doublons)
+          INPUT_SHARES=$(echo '${{ inputs.fileshares }}' | tr -d '[]" ' | tr ',' '\n')
+          ALL_SHARES=$(printf "%s\n%s" "$INPUT_SHARES" "$EXISTING_SHARES" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sort -u \
+            | grep -v '^$')
+
+          # Construire le JSON pour le tfvars
+          FILESHARES=$(echo "$ALL_SHARES" \
+            | awk 'BEGIN{printf "["} NR==1{printf "\"%s\"", $0} NR>1{printf ",\"%s\"", $0} END{printf "]"}')
+
+          echo "Fileshares input    : ${{ inputs.fileshares }}"
+          echo "Fileshares existants: $(echo "$EXISTING_SHARES" | tr '\n' ' ')"
+          echo "Fileshares fusionnes: ${FILESHARES}"
 
           cat > "${{ env.TF_VARFILE }}" <<EOF
           location                               = "${{ inputs.location }}"
@@ -512,6 +559,7 @@ jobs:
         run: |
           terraform destroy -auto-approve \
             -var-file="${{ env.TF_VARFILE }}" \
+            -target=azurerm_security_center_storage_defender.this \
             -target=module.fileshares \
             -target=module.storage_account
 

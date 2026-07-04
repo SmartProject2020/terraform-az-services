@@ -31,6 +31,7 @@ module "storage_account" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//StorageAccount?ref=poc"
 
   resource_group_name                    = local.rg_name
+  location                               = var.location
   storage_account_name                   = local.storage_account_name
   storage_account_tier                   = var.STORAGE_ACCOUNT_TIER
   storage_account_kind                   = var.STORAGE_ACCOUNT_KIND
@@ -50,6 +51,23 @@ module "storage_account" {
   APPLICATION_ID                         = var.APPLICATION_ID
 
   depends_on = [module.rg]
+}
+
+# ==============================================================================
+# 4. Microsoft Defender for Storage
+# Requis pour l offre acquisition : les fichiers proviennent d entites externes,
+# le scan malware et la detection de donnees sensibles protegent l environnement Servier.
+# ==============================================================================
+resource "azurerm_security_center_storage_defender" "this" {
+  count = var.enable_defender ? 1 : 0
+
+  storage_account_id                          = module.storage_account.storage_account_id
+  malware_scanning_on_upload_enabled          = var.defender_malware_scanning_enabled
+  malware_scanning_on_upload_cap_gb_per_month = var.defender_malware_scanning_cap_gb_per_month
+  sensitive_data_discovery_enabled            = var.defender_sensitive_data_discovery_enabled
+  override_subscription_settings_enabled      = true
+
+  depends_on = [module.storage_account]
 }
 
 # ==============================================================================

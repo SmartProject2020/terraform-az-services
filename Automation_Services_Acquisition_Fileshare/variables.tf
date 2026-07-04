@@ -145,3 +145,28 @@ variable "quota_gb" {
   type        = number
   default     = 100
 }
+
+# ── Microsoft Defender for Storage ───────────────────────────────────────────
+variable "enable_defender" {
+  description = "Activer Microsoft Defender for Storage (recommande pour l acquisition : fichiers provenant d entites externes)"
+  type        = bool
+  default     = true
+}
+
+variable "defender_malware_scanning_enabled" {
+  description = "Activer le scan malware a l upload des fichiers"
+  type        = bool
+  default     = true
+}
+
+variable "defender_malware_scanning_cap_gb_per_month" {
+  description = "Plafond mensuel de scan malware en GB (-1 = illimite)"
+  type        = number
+  default     = 5000
+}
+
+variable "defender_sensitive_data_discovery_enabled" {
+  description = "Activer la detection de donnees sensibles (PII, secrets)"
+  type        = bool
+  default     = true
+}
