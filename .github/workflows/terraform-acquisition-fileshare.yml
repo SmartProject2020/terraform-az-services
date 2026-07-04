@@ -77,8 +77,8 @@ on:
         description: "Kind du Storage Account"
         required: true
         type: choice
-        options: [StorageV2, FileStorage]
-        default: "StorageV2"
+        options: [FileStorage, StorageV2]
+        default: "FileStorage"
 
       storage_account_replication_type:
         description: "Type de replication (FileStorage : LRS ou ZRS uniquement)"
