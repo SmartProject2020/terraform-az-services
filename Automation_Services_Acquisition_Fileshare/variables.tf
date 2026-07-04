@@ -146,30 +146,6 @@ variable "quota_gb" {
   default     = 100
 }
 
-# ── Storage V2 / Performance ─────────────────────────────────────────────────
-variable "provisioned_billing_model_version" {
-  description = "Modele de facturation : null (V1) ou V2 (IOPS + bande passante + capacite independants)"
-  type        = string
-  default     = null
-
-  validation {
-    condition     = var.provisioned_billing_model_version == null || var.provisioned_billing_model_version == "V2"
-    error_message = "provisioned_billing_model_version doit etre null (V1) ou V2."
-  }
-}
-
-variable "smb_multichannel_enabled" {
-  description = "Activer SMB Multichannel (FileStorage Premium uniquement)"
-  type        = bool
-  default     = false
-}
-
-variable "share_soft_delete_days" {
-  description = "Retention des fileshares supprimes en soft-delete (jours)"
-  type        = number
-  default     = 7
-}
-
 # ── Microsoft Defender for Storage ───────────────────────────────────────────
 variable "enable_defender" {
   description = "Activer Microsoft Defender for Storage (recommande pour l acquisition : fichiers provenant d entites externes)"

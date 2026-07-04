@@ -118,13 +118,6 @@ on:
         options: ["true", "false"]
         default: "true"
 
-      provisioned_billing_model_version:
-        description: "Modele de facturation Storage : V1 (capacite seule) ou V2 (IOPS + bande passante + capacite)"
-        required: false
-        type: choice
-        options: ["", "V2"]
-        default: ""
-
       terraform_version:
         description: "Version Terraform"
         required: false
@@ -353,10 +346,6 @@ jobs:
           echo "Fileshares existants: $(echo "$EXISTING_SHARES" | tr '\n' ' ')"
           echo "Fileshares fusionnes: ${FILESHARES}"
 
-          BILLING_MODEL="${{ inputs.provisioned_billing_model_version }}"
-          BILLING_LINE=""
-          [ "$BILLING_MODEL" = "V2" ] && BILLING_LINE='provisioned_billing_model_version = "V2"'
-
           cat > "${{ env.TF_VARFILE }}" <<EOF
           location                               = "${{ inputs.location }}"
           servier_environment                    = "${SERVIER_ENV}"
@@ -366,7 +355,6 @@ jobs:
           STORAGE_ACCOUNT_ACCESS_TIER            = "Hot"
           blob_delete_retention_policy_days      = 7
           container_delete_retention_policy_days = 7
-          ${BILLING_LINE}
           EOF
 
           echo "tfvars genere :"

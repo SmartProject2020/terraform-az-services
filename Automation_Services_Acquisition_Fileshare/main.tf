@@ -49,9 +49,6 @@ module "storage_account" {
   sftp_enabled                           = local.sftp_enabled
   is_hns_enabled                         = local.is_hns_enabled
   APPLICATION_ID                         = var.APPLICATION_ID
-  provisioned_billing_model_version      = var.provisioned_billing_model_version
-  smb_multichannel_enabled               = var.smb_multichannel_enabled
-  share_soft_delete_days                 = var.share_soft_delete_days
 
   depends_on = [module.rg]
 }
