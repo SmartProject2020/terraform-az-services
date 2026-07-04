@@ -70,6 +70,43 @@ resource "azurerm_security_center_storage_defender" "this" {
   depends_on = [module.storage_account]
 }
 
+# Le provider azurerm 4.x ignore silencieusement malware scanning / sensitive data discovery
+# quand le plan subscription n est pas DefenderForStorageV2. Ce terraform_data force
+# les settings via l API REST directement, sans activer le plan sur toute la subscription.
+resource "terraform_data" "defender_settings" {
+  count = var.enable_defender && var.defender_malware_scanning_enabled ? 1 : 0
+
+  triggers_replace = [module.storage_account.storage_account_id]
+
+  provisioner "local-exec" {
+    interpreter = ["bash", "-c"]
+    command     = <<-EOT
+      SA_ID="${module.storage_account.storage_account_id}"
+      az rest \
+        --method PUT \
+        --url "${module.storage_account.storage_account_id}/providers/Microsoft.Security/defenderForStorageSettings/current?api-version=2022-12-01-preview" \
+        --body '{
+          "properties": {
+            "isEnabled": true,
+            "overrideSubscriptionLevelSettings": true,
+            "malwareScanning": {
+              "onUpload": {
+                "isEnabled": ${var.defender_malware_scanning_enabled},
+                "capGBPerMonth": ${var.defender_malware_scanning_cap_gb_per_month}
+              }
+            },
+            "sensitiveDataDiscovery": {
+              "isEnabled": ${var.defender_sensitive_data_discovery_enabled}
+            }
+          }
+        }'
+      echo "Defender for Storage settings appliques sur $SA_ID"
+    EOT
+  }
+
+  depends_on = [azurerm_security_center_storage_defender.this]
+}
+
 # ==============================================================================
 # 3. Azure File Shares
 # Crée directement sur le SA géré dans ce state (pas de data source).
