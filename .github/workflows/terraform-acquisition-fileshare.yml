@@ -131,7 +131,7 @@ permissions:
 jobs:
   terraform:
     name: "Terraform ${{ inputs.operation }} — Acquisition/${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }}/${{ inputs.application_id }}/sta${{ inputs.storage_account_inc }}"
-    runs-on: [Automation_linux_pool]
+    runs-on: ubuntu-latest
 
     env:
       TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-acquisition-fileshare-${{ inputs.storage_account_inc }}"
