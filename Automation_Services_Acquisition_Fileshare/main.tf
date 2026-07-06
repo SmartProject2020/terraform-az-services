@@ -35,7 +35,7 @@ module "storage_account" {
   storage_account_name                   = local.storage_account_name
   storage_account_tier                   = var.STORAGE_ACCOUNT_TIER
   storage_account_kind                   = var.STORAGE_ACCOUNT_KIND
-  storage_account_replication_type       = var.STORAGE_ACCOUNT_REPLICATION_TYPE
+  storage_account_replication_type       = local.storage_replication_type
   storage_account_access_tier            = var.STORAGE_ACCOUNT_ACCESS_TIER
   blob_delete_retention_policy_days      = var.blob_delete_retention_policy_days
   container_delete_retention_policy_days = var.container_delete_retention_policy_days

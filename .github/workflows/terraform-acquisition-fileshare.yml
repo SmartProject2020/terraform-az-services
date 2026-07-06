@@ -74,18 +74,11 @@ on:
         type: string
 
       storage_account_kind:
-        description: "Kind du Storage Account"
+        description: "Kind du Storage Account (StorageV2 recommande pour Defender complet)"
         required: true
         type: choice
-        options: [FileStorage, StorageV2]
-        default: "FileStorage"
-
-      storage_account_replication_type:
-        description: "Type de replication (FileStorage : LRS ou ZRS uniquement)"
-        required: true
-        type: choice
-        options: [LRS, ZRS, GRS]
-        default: "LRS"
+        options: [StorageV2, FileStorage]
+        default: "StorageV2"
 
       fileshares:
         description: 'Liste des fileshares (JSON array, ex: ["TEST","Home","logs"])'
@@ -146,9 +139,9 @@ jobs:
       TF_VAR_RESOURCE_GROUP_INC:               "${{ inputs.resource_group_inc }}"
       TF_VAR_STORAGE_ACCOUNT_INC:              "${{ inputs.storage_account_inc }}"
       TF_VAR_STORAGE_ACCOUNT_KIND:             "${{ inputs.storage_account_kind }}"
-      TF_VAR_STORAGE_ACCOUNT_REPLICATION_TYPE: "${{ inputs.storage_account_replication_type }}"
       TF_VAR_enable_defender:                  "${{ inputs.enable_defender }}"
       # STORAGE_ACCOUNT_TIER : dérivé à l'étape 6 (Standard/Premium selon kind)
+      # STORAGE_ACCOUNT_REPLICATION_TYPE : dérivé dans locals.tf (GRS PRD / LRS NPR)
       # STORAGE_ACCOUNT_ACCESS_TIER : fixe Hot (via tfvars)
 
     steps:
@@ -167,7 +160,7 @@ jobs:
           echo "  resource_group_inc     : ${{ inputs.resource_group_inc }}"
           echo "  storage_account_inc    : ${{ inputs.storage_account_inc }}"
           echo "  storage_account_kind   : ${{ inputs.storage_account_kind }}"
-          echo "  replication_type       : ${{ inputs.storage_account_replication_type }}"
+          echo "  replication_type       : derive (GRS PRD / LRS NPR)"
           echo "  fileshares             : ${{ inputs.fileshares }}"
           echo "  quota_gb               : ${{ inputs.quota_gb }}"
           echo "  azure_ad_authentication: ${{ inputs.azure_ad_authentication }}"
@@ -188,12 +181,6 @@ jobs:
         if: inputs.setting == 'PRD' && inputs.operation == 'destroy'
         run: |
           echo "::error::DESTROY est interdit en setting PRD"
-          exit 1
-
-      - name: "BLOCAGE — FileStorage replication LRS/ZRS uniquement"
-        if: inputs.storage_account_kind == 'FileStorage' && inputs.storage_account_replication_type == 'GRS'
-        run: |
-          echo "::error::FileStorage ne supporte pas GRS. Choisir LRS ou ZRS."
           exit 1
 
       - name: "Clean git extraheader"

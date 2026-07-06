@@ -64,12 +64,6 @@ variable "STORAGE_ACCOUNT_KIND" {
   }
 }
 
-variable "STORAGE_ACCOUNT_REPLICATION_TYPE" {
-  description = "Type de replication (LRS ou ZRS pour FileStorage)"
-  type        = string
-  default     = "LRS"
-}
-
 variable "STORAGE_ACCOUNT_ACCESS_TIER" {
   description = "Tier d acces (Hot ou Cool)"
   type        = string
