@@ -546,7 +546,7 @@ jobs:
         run: |
           terraform destroy -auto-approve \
             -var-file="${{ env.TF_VARFILE }}" \
-            -target=azurerm_security_center_storage_defender.this \
+            -target='azurerm_security_center_storage_defender.this[0]' \
             -target=module.fileshares \
             -target=module.storage_account
 
