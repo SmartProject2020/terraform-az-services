@@ -70,7 +70,7 @@ Resource Group  : ${PLAQUE}-${SETTING}-${APPLICATION_ID}-${ENV}-RG${RESOURCE_GRO
 ServiceNow n’envoie que les paramètres variables. Les valeurs fixes (FileStorage, LRS, public, AD join, quota) sont gérées en interne par le workflow.
 
 ```bash
-POST https://api.github.com/repos/servier-github/terraform-az-services/actions/workflows/terraform-acquisition-fileshare.yml/dispatches
+POST https://api.github.com/repos/SmartProject2020/terraform-az-services/actions/workflows/terraform-acquisition-fileshare.yml/dispatches
 Authorization: Bearer {GITHUB_APP_TOKEN}
 Accept: application/vnd.github+json
 

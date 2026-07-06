@@ -77,7 +77,7 @@ Private Endpoint: ${PLAQUE}-${ENV}-${APPLICATION_ID}-PE${PE_INC}
 ### SA privé (blob, StorageV2, PRD)
 
 ```bash
-POST https://api.github.com/repos/servier-github/terraform-az-services/actions/workflows/terraform-storage-account.yml/dispatches
+POST https://api.github.com/repos/SmartProject2020/terraform-az-services/actions/workflows/terraform-storage-account.yml/dispatches
 Authorization: Bearer {GITHUB_APP_TOKEN}
 Accept: application/vnd.github+json
 

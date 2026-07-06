@@ -1,5 +1,5 @@
-# Repo root   : servier-github/Azure_Terraform_Services (branch: poc)
-# Repo module : servier-github/Azure_Terraform_Modules (branch: poc)
+# Repo root   : SmartProject2020/Azure_Terraform_Services (branch: poc)
+# Repo module : SmartProject2020/Azure_Terraform_Modules (branch: poc)
 # ═══════════════════════════════════════════════════════════════
 # ─────────────────────────────────────────────────────────────
 # Provider Entra ID (tenant Servier)

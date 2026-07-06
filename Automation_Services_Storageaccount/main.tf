@@ -18,6 +18,7 @@ module "storage_account" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//StorageAccount?ref=poc"
 
   resource_group_name                    = local.sa_resource_group_name
+  location                               = var.location
   storage_account_name                   = local.storage_account_name
   storage_account_tier                   = var.STORAGE_ACCOUNT_TIER
   storage_account_kind                   = var.STORAGE_ACCOUNT_KIND
@@ -46,6 +47,7 @@ module "private_endpoint" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//PrivateEndpoint?ref=poc"
 
   resource_group_name      = local.sa_resource_group_name
+  location                 = var.location
   resource_group_name_vnet = var.virtual_network_rg_name
   network_name             = var.vnet_name
   subnet_name              = var.delegated_subnet_name

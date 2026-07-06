@@ -170,6 +170,13 @@ on:
         required: true
         type: string
 
+      clean_state:
+        description: "Vider le state Terraform avant les imports (permet de repartir de zero en cas de pollution)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
 
 permissions:
   id-token: write
@@ -353,6 +360,32 @@ jobs:
           rm -f ~/.netrc
 
       # ========================================================================
+      # ETAPE 7b : Nettoyage state (si demande)
+      # ========================================================================
+      - name: "7b. Nettoyage state (si demande)"
+        if: inputs.clean_state == 'true'
+        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          set -euo pipefail
+          echo "Nettoyage du state demande — suppression de toutes les ressources..."
+          STATE_ITEMS=$(terraform state list 2>/dev/null || echo "")
+          if [ -n "$STATE_ITEMS" ]; then
+            while IFS= read -r resource; do
+              [ -z "$resource" ] && continue
+              echo "  state rm: $resource"
+              terraform state rm "$resource" || true
+            done <<< "$STATE_ITEMS"
+            echo "State vide."
+          else
+            echo "State deja vide — rien a supprimer."
+          fi
+
+      # ========================================================================
       # ETAPE 8a : Calcul noms ressources (RG + Host Pool)
       # ========================================================================
       - name: "8a. Calcul noms ressources (RG + Host Pool + Storage)"
@@ -401,6 +434,45 @@ jobs:
           }
 
           STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+
+          # ── Subnet bootstrap — DOIT ETRE EN PREMIER ──────────────────────────
+          # Le module.private_endpoint contient un data.azurerm_subnet qui est
+          # resolu lors de TOUT terraform import, meme pour d'autres ressources.
+          # Si le subnet n'existe pas (nouveau pool), tous les imports echouent.
+          # Solution : creer le subnet via -target avant tout autre import.
+          PLAQUE="${{ inputs.plaque }}"
+          SETTING="${{ inputs.setting }}"
+          SUBNET_NAME=$(echo "${PLAQUE}-${SETTING}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SNET01" | tr '[:lower:]' '[:upper:]')
+          NETWORK_KEY="${SETTING}-${{ inputs.network_zone }}"
+          case "$NETWORK_KEY" in
+            "PRD-standard") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET01" ;;
+            "PRD-critical") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET02" ;;
+            "NPR-standard") VNET_RG="EM50-NPR-AVDAZ-TST-RG01"; VNET_NAME="EM50-NPR-AVDAZ-VNET01" ;;
+            *)               VNET_RG=""; VNET_NAME="" ;;
+          esac
+          SNET_ADDR="module.subnet.azurerm_subnet.this"
+          if [ -n "${VNET_RG:-}" ]; then
+            SNET_ID="/subscriptions/${SUB}/resourceGroups/${VNET_RG}/providers/Microsoft.Network/virtualNetworks/${VNET_NAME}/subnets/${SUBNET_NAME}"
+            SNET_EXISTS=$(az network vnet subnet show --ids "$SNET_ID" --query id -o tsv 2>/dev/null || echo "")
+            if [ -n "$SNET_EXISTS" ]; then
+              if ! echo "$STATE_LIST" | grep -qF "$SNET_ADDR"; then
+                echo "Import Subnet $SUBNET_NAME..."
+                terraform import -var-file="${{ env.TF_VARFILE }}" "$SNET_ADDR" "$SNET_ID"
+                STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+              else
+                echo "Subnet $SUBNET_NAME deja dans le state. Import ignore."
+              fi
+            else
+              # Nouveau pool : le subnet doit exister avant tout import (sinon le
+              # data source PE echoue). On le cree maintenant via -target.
+              echo "Subnet $SUBNET_NAME absent — creation via terraform apply -target=module.subnet..."
+              terraform apply -target=module.subnet \
+                -var-file="${{ env.TF_VARFILE }}" \
+                -auto-approve
+              STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+              echo "Subnet cree."
+            fi
+          fi
 
           # ── Resource Group — cree si absent, importe si existant ─────────────
           RG_EXISTS=$(az group show --name "$RG_NAME" --subscription "$SUB" \
@@ -461,8 +533,6 @@ jobs:
           fi
 
           # ── Mot de passe admin local (Key Vault) ──────────────────────────
-          PLAQUE="${{ inputs.plaque }}"
-          SETTING="${{ inputs.setting }}"
           KV_INPUT="${{ inputs.kv_name }}"
           KV_RG_INPUT="${{ inputs.kv_resource_group_name }}"
           KV_NAME="${KV_INPUT:-${PLAQUE}-${SETTING}-AVD00-KV01}"
@@ -501,7 +571,8 @@ jobs:
 
           # ── Groupes Entra ID (Task #6) ────────────────────────────────────
           # Prerequis : le SP OIDC doit avoir Group.ReadWrite.All (Microsoft Graph)
-          GROUP_USERS_NAME="CB-GO-AVD${HP_NAME}-USERS"
+          # Convention naming Servier : EM-GA-AVD-AVD<POOLNAME> (users) / INTUNE-WIN11-AVD-AVD<POOLNAME> (devices)
+          GROUP_USERS_NAME="EM-GA-AVD-AVD${HP_NAME}"
 
           GROUP_USERS_ID=$(az ad group show --group "$GROUP_USERS_NAME" --query id -o tsv 2>/dev/null || echo "")
           if [ -n "$GROUP_USERS_ID" ]; then
@@ -517,7 +588,7 @@ jobs:
           fi
 
           # ── Groupe DEVICES Entra ID ───────────────────────────────────────
-          GROUP_DEVICES_NAME="CB-GO-AVD${HP_NAME}-DEVICES"
+          GROUP_DEVICES_NAME="INTUNE-WIN11-AVD-AVD${HP_NAME}"
           GROUP_DEVICES_ID=$(az ad group show --group "$GROUP_DEVICES_NAME" --query id -o tsv 2>/dev/null || echo "")
           if [ -n "$GROUP_DEVICES_ID" ]; then
             if ! echo "$STATE_LIST" | grep -qF "azuread_group.devices"; then
@@ -584,18 +655,27 @@ jobs:
           SA_NAME="${{ steps.names.outputs.sa }}"
           SHARE_FULL_NAME=$(echo "${{ inputs.application_id }}-fslogix" | tr '[:upper:]' '[:lower:]')
           DIR_ADDR="azurerm_storage_share_directory.profils"
+          DIR_URL="https://${SA_NAME}.file.core.windows.net/${SHARE_FULL_NAME}/profils"
 
-          # Import incondititionnel si absent du state : on essaie, echec = warning
-          # (az storage directory exists --auth-mode login peut echouer silencieusement
-          # si les droits data-plane ne sont pas encore propages)
           # azurerm_storage_share_directory attend l URL HTTPS (pas l ID ARM)
-          if ! echo "$STATE_LIST" | grep -qF "$DIR_ADDR"; then
-            DIR_URL="https://${SA_NAME}.file.core.windows.net/${SHARE_FULL_NAME}/profils"
+          # Si la ressource est dans le state mais pointe vers une ancienne SA (pollution),
+          # on la retire et on reimporte avec le bon ID.
+          if echo "$STATE_LIST" | grep -qF "$DIR_ADDR"; then
+            STATE_DIR_ID=$(terraform state show "$DIR_ADDR" 2>/dev/null \
+              | grep '^\s*id' | head -1 \
+              | sed -E 's/.*= *"([^"]+)".*/\1/' || echo "")
+            if [ "$STATE_DIR_ID" = "$DIR_URL" ]; then
+              echo "Repertoire profils deja dans le state avec le bon ID. Import ignore."
+            else
+              echo "Repertoire profils dans le state avec un ancien ID ($STATE_DIR_ID) — reimport..."
+              terraform state rm "$DIR_ADDR" || true
+              terraform import -var-file="${{ env.TF_VARFILE }}" "$DIR_ADDR" "$DIR_URL" || \
+                echo "::warning::Import repertoire profils echoue (absent ou droits data-plane insuffisants) — sera cree par Terraform"
+            fi
+          else
             echo "Tentative import repertoire profils ($DIR_URL)..."
             terraform import -var-file="${{ env.TF_VARFILE }}" "$DIR_ADDR" "$DIR_URL" || \
               echo "::warning::Import repertoire profils echoue (absent ou droits data-plane insuffisants) — sera cree par Terraform"
-          else
-            echo "Repertoire profils deja dans le state. Import ignore."
           fi
 
           # ── Storage Account FSLogix ───────────────────────────────────────
@@ -614,38 +694,6 @@ jobs:
             fi
           else
             echo "Storage Account $SA_NAME absent — sera cree par Terraform."
-          fi
-
-          # ── Subnet + Route Table Association ──────────────────────────────
-          SUBNET_NAME=$(echo "${PLAQUE}-${SETTING}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SNET01" | tr '[:lower:]' '[:upper:]')
-          NETWORK_KEY="${SETTING}-${{ inputs.network_zone }}"
-          case "$NETWORK_KEY" in
-            "PRD-standard") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET01" ;;
-            "PRD-critical") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET02" ;;
-            "NPR-standard") VNET_RG="EM50-NPR-AVDAZ-TST-RG01"; VNET_NAME="EM50-NPR-AVDAZ-VNET01" ;;
-            *)               echo "::warning::Combinaison SETTING+NETWORK_ZONE inconnue: $NETWORK_KEY"; VNET_RG=""; VNET_NAME="" ;;
-          esac
-          SNET_ADDR="module.subnet.azurerm_subnet.this"
-          SNET_ASSOC_ADDR="module.subnet.azurerm_subnet_route_table_association.this"
-          if [ -n "${VNET_RG:-}" ]; then
-            SNET_ID="/subscriptions/${SUB}/resourceGroups/${VNET_RG}/providers/Microsoft.Network/virtualNetworks/${VNET_NAME}/subnets/${SUBNET_NAME}"
-            SNET_EXISTS=$(az network vnet subnet show --ids "$SNET_ID" --query id -o tsv 2>/dev/null || echo "")
-            if [ -n "$SNET_EXISTS" ]; then
-              if ! echo "$STATE_LIST" | grep -qF "$SNET_ADDR"; then
-                echo "Import Subnet $SUBNET_NAME..."
-                terraform import -var-file="${{ env.TF_VARFILE }}" "$SNET_ADDR" "$SNET_ID"
-              else
-                echo "Subnet $SUBNET_NAME deja dans le state. Import ignore."
-              fi
-              if ! echo "$STATE_LIST" | grep -qF "$SNET_ASSOC_ADDR"; then
-                echo "Import Route Table Association pour $SUBNET_NAME..."
-                terraform import -var-file="${{ env.TF_VARFILE }}" "$SNET_ASSOC_ADDR" "$SNET_ID"
-              else
-                echo "Route Table Association deja dans le state. Import ignore."
-              fi
-            else
-              echo "Subnet $SUBNET_NAME absent — sera cree par Terraform."
-            fi
           fi
 
           # ── Fileshare FSLogix ─────────────────────────────────────────────

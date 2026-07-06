@@ -1,7 +1,7 @@
 ###############################################################
 # Pipeline Azure DevOps : Servier - Entra ID Custom Domain
-# Repo root   : servier-github/terraform-az-services (branch: poc)
-# Repo module : servier-github/Azure_Terraform_Modules (branch: poc)
+# Repo root   : SmartProject2020/terraform-az-services (branch: poc)
+# Repo module : SmartProject2020/Azure_Terraform_Modules (branch: poc)
 # Déclenché par ServiceNow via REST API :
 #   POST https://dev.azure.com/{org}/{project}/_apis/pipelines/{id}/runs?api-version=7.1
 ###############################################################
@@ -12,14 +12,14 @@ resources:
   repositories:
     - repository: terraform-az-services
       type: github
-      name: servier-github/terraform-az-services
+      name: SmartProject2020/terraform-az-services
       ref: refs/heads/poc
-      endpoint: servier-github
+      endpoint: SmartProject2020
     - repository: Azure_Terraform_Modules
       type: github
-      name: servier-github/Azure_Terraform_Modules
+      name: SmartProject2020/Azure_Terraform_Modules
       ref: refs/heads/poc
-      endpoint: servier-github
+      endpoint: SmartProject2020
 
 parameters:
   - name: action

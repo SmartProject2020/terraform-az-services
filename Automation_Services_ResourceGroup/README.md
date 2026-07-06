@@ -65,7 +65,7 @@ Aller sur **Actions → Terraform - Resource Group → Run workflow**, renseigne
 ### Via API (ServiceNow)
 
 ```bash
-POST https://api.github.com/repos/servier-github/terraform-az-services/actions/workflows/terraform-resource-group.yml/dispatches
+POST https://api.github.com/repos/SmartProject2020/terraform-az-services/actions/workflows/terraform-resource-group.yml/dispatches
 Authorization: Bearer {GITHUB_APP_TOKEN}
 Accept: application/vnd.github+json
 

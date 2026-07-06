@@ -71,7 +71,7 @@ Resource Group : ${PLAQUE}-${SETTING}-${APPLICATION_ID}-${ENV}-RG${RESOURCE_GROU
 ### Via API (ServiceNow)
 
 ```bash
-POST https://api.github.com/repos/servier-github/terraform-az-services/actions/workflows/terraform-keyvault.yml/dispatches
+POST https://api.github.com/repos/SmartProject2020/terraform-az-services/actions/workflows/terraform-keyvault.yml/dispatches
 Authorization: Bearer {GITHUB_APP_TOKEN}
 Accept: application/vnd.github+json
 

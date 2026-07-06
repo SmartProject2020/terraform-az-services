@@ -58,7 +58,7 @@ jobs:
     - name: "1b. Checkout terraform-az-services"
       uses: actions/checkout@v4
       with:
-        repository: servier-github/terraform-az-services
+        repository: SmartProject2020/terraform-az-services
         ref: features/syv
         token: ${{ steps.app_token.outputs.token }}
         path: terraform-az-services
@@ -66,7 +66,7 @@ jobs:
     - name: "1c. Checkout Terraform Modules"
       uses: actions/checkout@v4
       with:
-        repository: servier-github/Azure_Terraform_Modules
+        repository: SmartProject2020/Azure_Terraform_Modules
         ref: features/syv
         token: ${{ steps.app_token.outputs.token }}
         path: Azure_Terraform_Modules
@@ -284,7 +284,7 @@ jobs:
     - name: "7b. Checkout repo"
       uses: actions/checkout@v4
       with:
-        repository: servier-github/terraform-az-services
+        repository: SmartProject2020/terraform-az-services
         path: terraform-az-services
 
     - name: "7c. Download plan"

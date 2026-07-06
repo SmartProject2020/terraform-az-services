@@ -117,7 +117,7 @@ jobs:
       - name: "2a. Checkout terraform-az-services"
         uses: actions/checkout@v4
         with:
-          repository: servier-github/terraform-az-services
+          repository: SmartProject2020/terraform-az-services
           ref: ${{ github.ref_name }}
           token: ${{ steps.app-token.outputs.token }}
           path: terraform-az-services

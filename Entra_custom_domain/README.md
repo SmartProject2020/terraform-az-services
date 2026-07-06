@@ -75,7 +75,7 @@ Azure DevOps Pipeline (REST API webhook)
 
 Le code est réparti sur **deux repos GitHub distincts** :
 
-### Repo root — `servier-github/Azure_Terraform_Services` (branch: `poc`)
+### Repo root — `SmartProject2020/Azure_Terraform_Services` (branch: `poc`)
 Point d'entrée du pipeline. Contient le module root et le pipeline Azure DevOps.
 
 ```
@@ -91,7 +91,7 @@ Point d'entrée du pipeline. Contient le module root et le pipeline Azure DevOps
 └── README.md
 ```
 
-### Repo module — `servier-github/Azure_Terraform_Modules` (branch: `master`)
+### Repo module — `SmartProject2020/Azure_Terraform_Modules` (branch: `master`)
 Bibliothèque de modules Terraform réutilisables.
 
 ```
@@ -104,7 +104,7 @@ Bibliothèque de modules Terraform réutilisables.
 
 > Le module child est référencé dans `root/main.tf` via :
 > ```hcl
-> source = "github.com/servier-github/Azure_Terraform_Modules//Dns_Txt_Record?ref=master"
+> source = "github.com/SmartProject2020/Azure_Terraform_Modules//Dns_Txt_Record?ref=master"
 > ```
 > Terraform le télécharge automatiquement lors du `terraform init`.
 
@@ -180,11 +180,11 @@ https://marketplace.visualstudio.com/items?itemName=ms-devlabs.custom-terraform-
 #### Service Connection GitHub
 Service Connection existante de type **GitHub App Azure DevOps**
 
-- Nom : `servier-github` (référencé dans le pipeline sous `endpoint`)
-- Type : **GitHub App** (installée sur l'organisation `servier-github`)
+- Nom : `SmartProject2020` (référencé dans le pipeline sous `endpoint`)
+- Type : **GitHub App** (installée sur l'organisation `SmartProject2020`)
 - Donne accès aux deux repos :
-  - `servier-github/Azure_Terraform_Services`
-  - `servier-github/Azure_Terraform_Modules`
+  - `SmartProject2020/Azure_Terraform_Services`
+  - `SmartProject2020/Azure_Terraform_Modules`
 
 #### Variable Group : `servier-entraid-domain-vars`
 À créer dans **Pipelines > Library > + Variable group**
@@ -202,7 +202,7 @@ Service Connection existante de type **GitHub App Azure DevOps**
 | `SERVICENOW_USER` | Compte ServiceNow pour les callbacks REST | ✅ |
 | `SERVICENOW_PASSWORD` | Mot de passe du compte ServiceNow | ✅ |
 
-> **GITHUB_TOKEN** : générer un PAT GitHub avec le scope `repo` (read) sur le compte `servier-github`.
+> **GITHUB_TOKEN** : générer un PAT GitHub avec le scope `repo` (read) sur le compte `SmartProject2020`.
 > Il est injecté via `git config --global url."https://oauth2:TOKEN@github.com"` avant chaque `terraform init`
 > pour permettre le téléchargement du module depuis le repo privé.
 

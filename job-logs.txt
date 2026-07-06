@@ -1,0 +1,1309 @@
+﻿2026-06-22T10:44:11.3631327Z Current runner version: '2.335.1'
+2026-06-22T10:44:11.3655306Z ##[group]Runner Image Provisioner
+2026-06-22T10:44:11.3656400Z Hosted Compute Agent
+2026-06-22T10:44:11.3657241Z Version: 20260611.554
+2026-06-22T10:44:11.3658118Z Commit: 5e0782fdc9014723d3be820dd114dd31555c2bd1
+2026-06-22T10:44:11.3659047Z Build Date: 2026-06-11T21:40:46Z
+2026-06-22T10:44:11.3659941Z Worker ID: {3aa8beca-018e-47d7-b3ff-3e40f843a8d7}
+2026-06-22T10:44:11.3660907Z Azure Region: southcentralus
+2026-06-22T10:44:11.3661730Z ##[endgroup]
+2026-06-22T10:44:11.3663323Z ##[group]Operating System
+2026-06-22T10:44:11.3664134Z Ubuntu
+2026-06-22T10:44:11.3665108Z 24.04.4
+2026-06-22T10:44:11.3665827Z LTS
+2026-06-22T10:44:11.3666514Z ##[endgroup]
+2026-06-22T10:44:11.3667259Z ##[group]Runner Image
+2026-06-22T10:44:11.3668063Z Image: ubuntu-24.04
+2026-06-22T10:44:11.3668883Z Version: 20260615.205.1
+2026-06-22T10:44:11.3670330Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260615.205/images/ubuntu/Ubuntu2404-Readme.md
+2026-06-22T10:44:11.3672051Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260615.205
+2026-06-22T10:44:11.3673244Z ##[endgroup]
+2026-06-22T10:44:11.3674757Z ##[group]GITHUB_TOKEN Permissions
+2026-06-22T10:44:11.3677101Z Contents: read
+2026-06-22T10:44:11.3677845Z Metadata: read
+2026-06-22T10:44:11.3678612Z ##[endgroup]
+2026-06-22T10:44:11.3680821Z Secret source: Actions
+2026-06-22T10:44:11.3681735Z Prepare workflow directory
+2026-06-22T10:44:11.4190587Z Prepare all required actions
+2026-06-22T10:44:11.4229336Z Getting action download info
+2026-06-22T10:44:11.7623652Z Download action repository 'tibdex/github-app-token@v2' (SHA:3beb63f4bd073e61482598c45c71c1019b59b73a)
+2026-06-22T10:44:12.1277228Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+2026-06-22T10:44:12.1996784Z Download action repository 'hashicorp/setup-terraform@v3' (SHA:b9cd54a3c349d3f38e8881555d616ced269862dd)
+2026-06-22T10:44:12.6575267Z Download action repository 'azure/login@v2' (SHA:a457da9ea143d694b1b9c7c869ebb04ebe844ef5)
+2026-06-22T10:44:13.0972957Z Complete job name: Terraform apply - EM50/NPR/POC - MADMSYS1
+2026-06-22T10:44:13.1749238Z ##[group]Run git config --global --unset-all http.https://github.com/.extraheader || true
+2026-06-22T10:44:13.1751963Z [36;1mgit config --global --unset-all http.https://github.com/.extraheader || true[0m
+2026-06-22T10:44:13.5428834Z shell: /usr/bin/bash -e {0}
+2026-06-22T10:44:13.5429634Z env:
+2026-06-22T10:44:13.5430076Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:13.5430629Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:13.5431186Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:13.5431635Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:13.5432013Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:13.5432379Z   TF_VAR_ENV: POC
+2026-06-22T10:44:13.5432764Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:13.5433174Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:13.5433594Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:13.5434039Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:13.5434443Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:13.5435063Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:13.5435459Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:13.5435859Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:13.5436292Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:13.5436961Z ##[endgroup]
+2026-06-22T10:44:13.5782106Z ##[warning]Unexpected input(s) 'installation_id', valid inputs are ['app_id', 'github_api_url', 'installation_retrieval_mode', 'installation_retrieval_payload', 'permissions', 'private_key', 'repositories', 'revoke']
+2026-06-22T10:44:13.5806313Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-06-22T10:44:13.5813092Z ##[group]Run tibdex/github-app-token@v2
+2026-06-22T10:44:13.5813789Z with:
+2026-06-22T10:44:13.5814143Z   app_id: 4114677
+2026-06-22T10:44:13.5821550Z   private_key: ***
+2026-06-22T10:44:13.5821948Z   installation_id: 141868202
+2026-06-22T10:44:13.5822417Z   github_api_url: https://api.github.com
+2026-06-22T10:44:13.5822921Z   installation_retrieval_mode: repository
+2026-06-22T10:44:13.5823576Z   installation_retrieval_payload: SmartProject2020/terraform-az-services
+2026-06-22T10:44:13.5824113Z   revoke: true
+2026-06-22T10:44:13.5824462Z env:
+2026-06-22T10:44:13.5825021Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:13.5825571Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:13.5826121Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:13.5826710Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:13.5827089Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:13.5827456Z   TF_VAR_ENV: POC
+2026-06-22T10:44:13.5827841Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:13.5828277Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:13.5828699Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:13.5829094Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:13.5829459Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:13.5829844Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:13.5830240Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:13.5830636Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:13.5831025Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:13.5831449Z ##[endgroup]
+2026-06-22T10:44:13.6775722Z (node:2086) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-06-22T10:44:13.6776902Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-06-22T10:44:13.6778465Z (node:2086) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-06-22T10:44:13.9901367Z Token created successfully
+2026-06-22T10:44:14.0139885Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-06-22T10:44:14.0141479Z ##[group]Run actions/checkout@v4
+2026-06-22T10:44:14.0141818Z with:
+2026-06-22T10:44:14.0142156Z   repository: SmartProject2020/terraform-az-services
+2026-06-22T10:44:14.0142561Z   ref: poc
+2026-06-22T10:44:14.0143079Z   token: ***
+2026-06-22T10:44:14.0143378Z   path: terraform-az-services
+2026-06-22T10:44:14.0143730Z   persist-credentials: false
+2026-06-22T10:44:14.0144068Z   ssh-strict: true
+2026-06-22T10:44:14.0144366Z   ssh-user: git
+2026-06-22T10:44:14.0144879Z   clean: true
+2026-06-22T10:44:14.0145203Z   sparse-checkout-cone-mode: true
+2026-06-22T10:44:14.0145563Z   fetch-depth: 1
+2026-06-22T10:44:14.0145859Z   fetch-tags: false
+2026-06-22T10:44:14.0146209Z   show-progress: true
+2026-06-22T10:44:14.0146491Z   lfs: false
+2026-06-22T10:44:14.0146758Z   submodules: false
+2026-06-22T10:44:14.0147054Z   set-safe-directory: true
+2026-06-22T10:44:14.0147376Z env:
+2026-06-22T10:44:14.0147679Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:14.0148124Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:14.0148547Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:14.0148916Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:14.0149213Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:14.0149500Z   TF_VAR_ENV: POC
+2026-06-22T10:44:14.0149792Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:14.0150126Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:14.0150462Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:14.0150772Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:14.0151084Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:14.0151386Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:14.0151695Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:14.0152192Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:14.0152514Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:14.0152893Z ##[endgroup]
+2026-06-22T10:44:14.1048245Z Syncing repository: SmartProject2020/terraform-az-services
+2026-06-22T10:44:14.1050691Z ##[group]Getting Git version info
+2026-06-22T10:44:14.1051859Z Working directory is '/home/runner/work/terraform-az-services/terraform-az-services/terraform-az-services'
+2026-06-22T10:44:14.1053286Z [command]/usr/bin/git version
+2026-06-22T10:44:14.1053838Z git version 2.54.0
+2026-06-22T10:44:14.1056005Z ##[endgroup]
+2026-06-22T10:44:14.1058647Z Temporarily overriding HOME='/home/runner/work/_temp/68b1edd0-d596-45ae-9e25-a8c7a64b26c6' before making global git config changes
+2026-06-22T10:44:14.1060073Z Adding repository directory to the temporary git global config as a safe directory
+2026-06-22T10:44:14.1061663Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/terraform-az-services/terraform-az-services/terraform-az-services
+2026-06-22T10:44:14.1087509Z ##[group]Initializing the repository
+2026-06-22T10:44:14.1091542Z [command]/usr/bin/git init /home/runner/work/terraform-az-services/terraform-az-services/terraform-az-services
+2026-06-22T10:44:14.1188601Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-06-22T10:44:14.1189504Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-06-22T10:44:14.1190122Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-06-22T10:44:14.1190594Z hint: call:
+2026-06-22T10:44:14.1190862Z hint:
+2026-06-22T10:44:14.1191377Z hint: 	git config --global init.defaultBranch <name>
+2026-06-22T10:44:14.1192063Z hint:
+2026-06-22T10:44:14.1192736Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-06-22T10:44:14.1193871Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-06-22T10:44:14.1194488Z hint:
+2026-06-22T10:44:14.1194988Z hint: 	git branch -m <name>
+2026-06-22T10:44:14.1195783Z hint:
+2026-06-22T10:44:14.1196291Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-06-22T10:44:14.1197133Z Initialized empty Git repository in /home/runner/work/terraform-az-services/terraform-az-services/terraform-az-services/.git/
+2026-06-22T10:44:14.1204085Z [command]/usr/bin/git remote add origin https://github.com/SmartProject2020/terraform-az-services
+2026-06-22T10:44:14.1242760Z ##[endgroup]
+2026-06-22T10:44:14.1243317Z ##[group]Disabling automatic garbage collection
+2026-06-22T10:44:14.1245930Z [command]/usr/bin/git config --local gc.auto 0
+2026-06-22T10:44:14.1267813Z ##[endgroup]
+2026-06-22T10:44:14.1268332Z ##[group]Setting up auth
+2026-06-22T10:44:14.1273317Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-06-22T10:44:14.1300699Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-06-22T10:44:14.1592390Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-06-22T10:44:14.1618443Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-06-22T10:44:14.1786105Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-06-22T10:44:14.1809833Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-06-22T10:44:14.1971486Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-06-22T10:44:14.1996876Z ##[endgroup]
+2026-06-22T10:44:14.1997762Z ##[group]Fetching the repository
+2026-06-22T10:44:14.2005353Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +refs/heads/poc*:refs/remotes/origin/poc* +refs/tags/poc*:refs/tags/poc*
+2026-06-22T10:44:14.6812674Z From https://github.com/SmartProject2020/terraform-az-services
+2026-06-22T10:44:14.6813790Z  * [new branch]      poc        -> origin/poc
+2026-06-22T10:44:14.6854348Z ##[endgroup]
+2026-06-22T10:44:14.6860511Z ##[group]Determining the checkout info
+2026-06-22T10:44:14.6861523Z [command]/usr/bin/git branch --list --remote origin/poc
+2026-06-22T10:44:14.6876929Z   origin/poc
+2026-06-22T10:44:14.6885850Z ##[endgroup]
+2026-06-22T10:44:14.6892490Z [command]/usr/bin/git sparse-checkout disable
+2026-06-22T10:44:14.6925832Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-06-22T10:44:14.6947396Z ##[group]Checking out the ref
+2026-06-22T10:44:14.6950392Z [command]/usr/bin/git checkout --progress --force -B poc refs/remotes/origin/poc
+2026-06-22T10:44:14.7078990Z Switched to a new branch 'poc'
+2026-06-22T10:44:14.7081997Z branch 'poc' set up to track 'origin/poc'.
+2026-06-22T10:44:14.7085336Z ##[endgroup]
+2026-06-22T10:44:14.7124482Z [command]/usr/bin/git log -1 --format=%H
+2026-06-22T10:44:14.7143460Z e2bfcc354ebafc5994dbfea3eaafcd913406427c
+2026-06-22T10:44:14.7150936Z ##[group]Removing auth
+2026-06-22T10:44:14.7154169Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-06-22T10:44:14.7176401Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-06-22T10:44:14.7337434Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-06-22T10:44:14.7357244Z http.https://github.com/.extraheader
+2026-06-22T10:44:14.7363257Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-06-22T10:44:14.7386778Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-06-22T10:44:14.7544973Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-06-22T10:44:14.7568037Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-06-22T10:44:14.7730277Z ##[endgroup]
+2026-06-22T10:44:14.7861432Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-06-22T10:44:14.7862738Z ##[group]Run hashicorp/setup-terraform@v3
+2026-06-22T10:44:14.7863093Z with:
+2026-06-22T10:44:14.7863404Z   terraform_version: 1.7.5
+2026-06-22T10:44:14.7863817Z   cli_config_credentials_hostname: app.terraform.io
+2026-06-22T10:44:14.7864236Z   terraform_wrapper: true
+2026-06-22T10:44:14.7864558Z env:
+2026-06-22T10:44:14.7865216Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:14.7865709Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:14.7866138Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:14.7866494Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:14.7866786Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:14.7867102Z   TF_VAR_ENV: POC
+2026-06-22T10:44:14.7867390Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:14.7867723Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:14.7868059Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:14.7868375Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:14.7868671Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:14.7868968Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:14.7869289Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:14.7869606Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:14.7869905Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:14.7870247Z ##[endgroup]
+2026-06-22T10:44:14.9115702Z (node:2298) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-06-22T10:44:14.9117813Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-06-22T10:44:15.3366685Z [command]/usr/bin/unzip -o -q /home/runner/work/_temp/868bff73-e62d-4ce8-aced-bd25df6660c8
+2026-06-22T10:44:15.9389329Z ##[group]Run set -euo pipefail
+2026-06-22T10:44:15.9389722Z [36;1mset -euo pipefail[0m
+2026-06-22T10:44:15.9390040Z [36;1mPLAQUE="EM50"[0m
+2026-06-22T10:44:15.9390339Z [36;1mSETTING="NPR"[0m
+2026-06-22T10:44:15.9390634Z [36;1mENV="POC"[0m
+2026-06-22T10:44:15.9390914Z [36;1m[0m
+2026-06-22T10:44:15.9391279Z [36;1mSECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_${SETTING}"[0m
+2026-06-22T10:44:15.9391788Z [36;1mBACKEND_FILE="backends/${PLAQUE}-${ENV}.tfbackend"[0m
+2026-06-22T10:44:15.9392181Z [36;1m[0m
+2026-06-22T10:44:15.9392641Z [36;1mecho "secret=$SECRET_NAME"   >> "$GITHUB_OUTPUT"[0m
+2026-06-22T10:44:15.9393090Z [36;1mecho "backend=$BACKEND_FILE" >> "$GITHUB_OUTPUT"[0m
+2026-06-22T10:44:15.9393509Z [36;1mecho "Secret name  : $SECRET_NAME"[0m
+2026-06-22T10:44:15.9393898Z [36;1mecho "Backend file : $BACKEND_FILE"[0m
+2026-06-22T10:44:15.9414930Z shell: /usr/bin/bash -e {0}
+2026-06-22T10:44:15.9415267Z env:
+2026-06-22T10:44:15.9415623Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:15.9416061Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:15.9416493Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:15.9416858Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:15.9417150Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:15.9417434Z   TF_VAR_ENV: POC
+2026-06-22T10:44:15.9417724Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:15.9418054Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:15.9418380Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:15.9418694Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:15.9418995Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:15.9419293Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:15.9419601Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:15.9419907Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:15.9420193Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:15.9420655Z   TERRAFORM_CLI_PATH: /home/runner/work/_temp/485f6c72-2e7f-4550-8473-476c9274bf9b
+2026-06-22T10:44:15.9421115Z ##[endgroup]
+2026-06-22T10:44:15.9461934Z Secret name  : AZURE_CLIENT_ID_SC_OIDC_EM50_NPR
+2026-06-22T10:44:15.9462536Z Backend file : backends/EM50-POC.tfbackend
+2026-06-22T10:44:15.9515761Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-06-22T10:44:15.9517030Z ##[group]Run azure/login@v2
+2026-06-22T10:44:15.9517334Z with:
+2026-06-22T10:44:15.9517744Z   client-id: ***
+2026-06-22T10:44:15.9518059Z   tenant-id: 14f45d39-b147-4ed8-885d-ee9a1ca2bd85
+2026-06-22T10:44:15.9518496Z   subscription-id: 33e1047f-3638-4d90-a433-145522e18317
+2026-06-22T10:44:15.9518901Z   enable-AzPSSession: false
+2026-06-22T10:44:15.9519220Z   environment: azurecloud
+2026-06-22T10:44:15.9519561Z   allow-no-subscriptions: false
+2026-06-22T10:44:15.9519918Z   audience: api://AzureADTokenExchange
+2026-06-22T10:44:15.9520284Z   auth-type: SERVICE_PRINCIPAL
+2026-06-22T10:44:15.9520589Z env:
+2026-06-22T10:44:15.9520921Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:15.9521341Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:15.9521763Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:15.9522122Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:15.9522408Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:15.9522698Z   TF_VAR_ENV: POC
+2026-06-22T10:44:15.9522999Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:15.9523319Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:15.9523785Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:15.9524094Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:15.9524388Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:15.9524846Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:15.9525220Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:15.9525535Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:15.9525832Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:15.9526300Z   TERRAFORM_CLI_PATH: /home/runner/work/_temp/485f6c72-2e7f-4550-8473-476c9274bf9b
+2026-06-22T10:44:15.9526766Z ##[endgroup]
+2026-06-22T10:44:15.9916489Z Running Azure CLI Login.
+2026-06-22T10:44:25.8130646Z [command]/usr/bin/az cloud set -n azurecloud
+2026-06-22T10:44:27.1082275Z Done setting cloud: "azurecloud"
+2026-06-22T10:44:27.2555972Z Federated token details:
+2026-06-22T10:44:27.2556816Z  issuer - https://token.actions.githubusercontent.com
+2026-06-22T10:44:27.2557928Z  subject claim - repo:SmartProject2020/terraform-az-services:ref:refs/heads/poc
+2026-06-22T10:44:27.2558938Z  audience - api://AzureADTokenExchange
+2026-06-22T10:44:27.2560141Z  job_workflow_ref - SmartProject2020/terraform-az-services/.github/workflows/terraform-avd-hostpool.yml@refs/heads/poc
+2026-06-22T10:44:27.2561262Z Attempting Azure CLI login by using OIDC...
+2026-06-22T10:44:31.8374848Z Subscription is set successfully.
+2026-06-22T10:44:31.8376131Z Azure CLI login succeeds by using OIDC.
+2026-06-22T10:44:31.8503437Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-06-22T10:44:31.8505223Z ##[group]Run hashicorp/setup-terraform@v3
+2026-06-22T10:44:31.8505597Z with:
+2026-06-22T10:44:31.8505895Z   terraform_version: 1.7.5
+2026-06-22T10:44:31.8506254Z   cli_config_credentials_hostname: app.terraform.io
+2026-06-22T10:44:31.8506650Z   terraform_wrapper: true
+2026-06-22T10:44:31.8506961Z env:
+2026-06-22T10:44:31.8507269Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:31.8507693Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:31.8508118Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:31.8508483Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:31.8508774Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:31.8509086Z   TF_VAR_ENV: POC
+2026-06-22T10:44:31.8509377Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:31.8509705Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:31.8510029Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:31.8510347Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:31.8510637Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:31.8510940Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:31.8511242Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:31.8511551Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:31.8511855Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:31.8512318Z   TERRAFORM_CLI_PATH: /home/runner/work/_temp/485f6c72-2e7f-4550-8473-476c9274bf9b
+2026-06-22T10:44:31.8512792Z ##[endgroup]
+2026-06-22T10:44:31.9831851Z (node:2446) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-06-22T10:44:31.9834000Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-06-22T10:44:32.3454146Z [command]/usr/bin/unzip -o -q /home/runner/work/_temp/7e0d81fb-ab53-4819-b7e9-90d6e3463e79
+2026-06-22T10:44:32.8943517Z ##[group]Run set -euo pipefail
+2026-06-22T10:44:32.8943913Z [36;1mset -euo pipefail[0m
+2026-06-22T10:44:32.8944233Z [36;1mmkdir -p vars[0m
+2026-06-22T10:44:32.8944529Z [36;1m[0m
+2026-06-22T10:44:32.8945048Z [36;1mSERVIER_ENV="POC"[0m
+2026-06-22T10:44:32.8945379Z [36;1mif [ "NPR" = "PRD" ]; then[0m
+2026-06-22T10:44:32.8945733Z [36;1m  SERVIER_ENV="PRD"[0m
+2026-06-22T10:44:32.8946045Z [36;1mfi[0m
+2026-06-22T10:44:32.8946464Z [36;1m[0m
+2026-06-22T10:44:32.8946838Z [36;1mto_str_or_null() { [ -z "$1" ] && echo "null" || printf '"%s"' "$1"; }[0m
+2026-06-22T10:44:32.8947367Z [36;1mto_num_or_null() { [ -z "$1" ] && echo "null" || echo "$1"; }[0m
+2026-06-22T10:44:32.8947769Z [36;1m[0m
+2026-06-22T10:44:32.8948137Z [36;1mcat > "vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" << EOF[0m
+2026-06-22T10:44:32.8948610Z [36;1mlocation                         = "France Central"[0m
+2026-06-22T10:44:32.8949071Z [36;1mservier_environment              = "${SERVIER_ENV}"[0m
+2026-06-22T10:44:32.8949575Z [36;1mfriendly_name                    = $(to_str_or_null "")[0m
+2026-06-22T10:44:32.8950043Z [36;1mdescription                      = $(to_str_or_null "")[0m
+2026-06-22T10:44:32.8950504Z [36;1mload_balancer_type               = "BreadthFirst"[0m
+2026-06-22T10:44:32.8951002Z [36;1mpersonal_desktop_assignment_type = $(to_str_or_null "Automatic")[0m
+2026-06-22T10:44:32.8951541Z [36;1mmaximum_sessions_allowed         = $(to_num_or_null "5")[0m
+2026-06-22T10:44:32.8951997Z [36;1mstart_vm_on_connect              = true[0m
+2026-06-22T10:44:32.8952405Z [36;1mvalidate_environment             = false[0m
+2026-06-22T10:44:32.8952847Z [36;1mcustom_rdp_properties            = $(to_str_or_null "")[0m
+2026-06-22T10:44:32.8953288Z [36;1mregistration_expiration_hours    = 8[0m
+2026-06-22T10:44:32.8953744Z [36;1mscaling_plan_time_zone           = "Romance Standard Time"[0m
+2026-06-22T10:44:32.8954168Z [36;1mEOF[0m
+2026-06-22T10:44:32.8954435Z [36;1m[0m
+2026-06-22T10:44:32.8955189Z [36;1mecho "----- vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars -----"[0m
+2026-06-22T10:44:32.8955739Z [36;1mcat "vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars"[0m
+2026-06-22T10:44:32.8974161Z shell: /usr/bin/bash -e {0}
+2026-06-22T10:44:32.8974508Z env:
+2026-06-22T10:44:32.8974981Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:32.8975432Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:32.8975854Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:32.8976229Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:32.8976523Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:32.8976804Z   TF_VAR_ENV: POC
+2026-06-22T10:44:32.8977101Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:32.8977434Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:32.8977773Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:32.8978090Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:32.8978392Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:32.8978697Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:32.8979022Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:32.8979350Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:32.8979653Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:32.8980133Z   TERRAFORM_CLI_PATH: /home/runner/work/_temp/dc62adc6-b130-4a05-b275-bee128efceef
+2026-06-22T10:44:32.8980622Z ##[endgroup]
+2026-06-22T10:44:32.9055795Z ----- vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars -----
+2026-06-22T10:44:32.9062572Z location                         = "France Central"
+2026-06-22T10:44:32.9063221Z servier_environment              = "POC"
+2026-06-22T10:44:32.9063610Z friendly_name                    = null
+2026-06-22T10:44:32.9063977Z description                      = null
+2026-06-22T10:44:32.9064394Z load_balancer_type               = "BreadthFirst"
+2026-06-22T10:44:32.9065310Z personal_desktop_assignment_type = "Automatic"
+2026-06-22T10:44:32.9065933Z maximum_sessions_allowed         = 5
+2026-06-22T10:44:32.9066297Z start_vm_on_connect              = true
+2026-06-22T10:44:32.9066648Z validate_environment             = false
+2026-06-22T10:44:32.9067176Z custom_rdp_properties            = null
+2026-06-22T10:44:32.9067555Z registration_expiration_hours    = 8
+2026-06-22T10:44:32.9067972Z scaling_plan_time_zone           = "Romance Standard Time"
+2026-06-22T10:44:32.9092913Z ##[group]Run BACKEND_FILE="terraform-az-services/Automation_Services_Avd/HostPool/backends/EM50-POC.tfbackend"
+2026-06-22T10:44:32.9093803Z [36;1mBACKEND_FILE="terraform-az-services/Automation_Services_Avd/HostPool/backends/EM50-POC.tfbackend"[0m
+2026-06-22T10:44:32.9094835Z [36;1mSA=$(grep -E '^storage_account_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')[0m
+2026-06-22T10:44:32.9095562Z [36;1mCONTAINER=$(grep -E '^container_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')[0m
+2026-06-22T10:44:32.9096200Z [36;1mBLOB="avd-hostpool-tfstateenv:EM50-POC-AVD00-hostpool-MADMSYS1"[0m
+2026-06-22T10:44:32.9096713Z [36;1mecho "Break lock sur $SA/$CONTAINER/$BLOB..."[0m
+2026-06-22T10:44:32.9097124Z [36;1maz storage blob lease break \[0m
+2026-06-22T10:44:32.9097484Z [36;1m  --account-name "$SA" \[0m
+2026-06-22T10:44:32.9097846Z [36;1m  --container-name "$CONTAINER" \[0m
+2026-06-22T10:44:32.9098216Z [36;1m  --blob-name "$BLOB" \[0m
+2026-06-22T10:44:32.9098589Z [36;1m  --auth-mode login 2>/dev/null \[0m
+2026-06-22T10:44:32.9098990Z [36;1m  && echo "Lock libere" || echo "Pas de lock actif"[0m
+2026-06-22T10:44:32.9115396Z shell: /usr/bin/bash -e {0}
+2026-06-22T10:44:32.9115733Z env:
+2026-06-22T10:44:32.9116059Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:32.9116525Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:32.9116954Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:32.9117329Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:32.9117625Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:32.9117905Z   TF_VAR_ENV: POC
+2026-06-22T10:44:32.9118210Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:32.9118539Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:32.9118872Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:32.9119185Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:32.9119485Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:32.9119789Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:32.9120102Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:32.9120417Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:32.9120713Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:32.9121178Z   TERRAFORM_CLI_PATH: /home/runner/work/_temp/dc62adc6-b130-4a05-b275-bee128efceef
+2026-06-22T10:44:32.9121661Z   ARM_USE_OIDC: true
+2026-06-22T10:44:32.9121998Z   ARM_TENANT_ID: 14f45d39-b147-4ed8-885d-ee9a1ca2bd85
+2026-06-22T10:44:32.9122441Z   ARM_SUBSCRIPTION_ID: 33e1047f-3638-4d90-a433-145522e18317
+2026-06-22T10:44:32.9123006Z   ARM_CLIENT_ID: ***
+2026-06-22T10:44:32.9123308Z ##[endgroup]
+2026-06-22T10:44:32.9190030Z Break lock sur tfstateitmatched/tfstate-poc/avd-hostpool-tfstateenv:EM50-POC-AVD00-hostpool-MADMSYS1...
+2026-06-22T10:44:40.3968650Z Pas de lock actif
+2026-06-22T10:44:40.4016020Z ##[warning]Unexpected input(s) 'installation_id', valid inputs are ['app_id', 'github_api_url', 'installation_retrieval_mode', 'installation_retrieval_payload', 'permissions', 'private_key', 'repositories', 'revoke']
+2026-06-22T10:44:40.4023511Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-06-22T10:44:40.4025141Z ##[group]Run tibdex/github-app-token@v2
+2026-06-22T10:44:40.4025501Z with:
+2026-06-22T10:44:40.4025778Z   app_id: 4114677
+2026-06-22T10:44:40.4032669Z   private_key: ***
+2026-06-22T10:44:40.4032973Z   installation_id: 141868202
+2026-06-22T10:44:40.4033285Z   revoke: false
+2026-06-22T10:44:40.4033599Z   github_api_url: https://api.github.com
+2026-06-22T10:44:40.4034027Z   installation_retrieval_mode: repository
+2026-06-22T10:44:40.4034490Z   installation_retrieval_payload: SmartProject2020/terraform-az-services
+2026-06-22T10:44:40.4035128Z env:
+2026-06-22T10:44:40.4035441Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:40.4035888Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:40.4036317Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:40.4036684Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:40.4036970Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:40.4037249Z   TF_VAR_ENV: POC
+2026-06-22T10:44:40.4037550Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:40.4038035Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:40.4038371Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:40.4038679Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:40.4038975Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:40.4039270Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:40.4039571Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:40.4039880Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:40.4040177Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:40.4040643Z   TERRAFORM_CLI_PATH: /home/runner/work/_temp/dc62adc6-b130-4a05-b275-bee128efceef
+2026-06-22T10:44:40.4041112Z ##[endgroup]
+2026-06-22T10:44:40.4986101Z (node:2500) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-06-22T10:44:40.4987599Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-06-22T10:44:40.4990146Z (node:2500) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-06-22T10:44:40.7705752Z Token created successfully
+2026-06-22T10:44:40.7788312Z ##[group]Run set -euo pipefail
+2026-06-22T10:44:40.7788687Z [36;1mset -euo pipefail[0m
+2026-06-22T10:44:40.7789191Z [36;1mecho "machine github.com login x-access-token password ${GITHUB_TOKEN}" > ~/.netrc[0m
+2026-06-22T10:44:40.7789689Z [36;1mchmod 600 ~/.netrc[0m
+2026-06-22T10:44:40.7790008Z [36;1munset TF_WORKSPACE[0m
+2026-06-22T10:44:40.7790472Z [36;1mterraform init -reconfigure -backend-config="backends/EM50-POC.tfbackend"[0m
+2026-06-22T10:44:40.7791105Z [36;1mterraform workspace new "EM50-POC-AVD00-hostpool-MADMSYS1" 2>/dev/null || \[0m
+2026-06-22T10:44:40.7791698Z [36;1mterraform workspace select "EM50-POC-AVD00-hostpool-MADMSYS1"[0m
+2026-06-22T10:44:40.7792142Z [36;1mrm -f ~/.netrc[0m
+2026-06-22T10:44:40.7810947Z shell: /usr/bin/bash -e {0}
+2026-06-22T10:44:40.7811288Z env:
+2026-06-22T10:44:40.7811631Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:40.7812077Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:40.7812536Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:40.7812903Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:40.7813206Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:40.7813494Z   TF_VAR_ENV: POC
+2026-06-22T10:44:40.7813792Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:40.7814141Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:40.7814484Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:40.7815233Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:40.7815535Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:40.7815840Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:40.7816141Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:40.7816455Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:40.7816748Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:40.7817221Z   TERRAFORM_CLI_PATH: /home/runner/work/_temp/dc62adc6-b130-4a05-b275-bee128efceef
+2026-06-22T10:44:40.7817690Z   ARM_USE_OIDC: true
+2026-06-22T10:44:40.7818034Z   ARM_TENANT_ID: 14f45d39-b147-4ed8-885d-ee9a1ca2bd85
+2026-06-22T10:44:40.7818470Z   ARM_SUBSCRIPTION_ID: 33e1047f-3638-4d90-a433-145522e18317
+2026-06-22T10:44:40.7818996Z   ARM_CLIENT_ID: ***
+2026-06-22T10:44:40.7819425Z   GITHUB_TOKEN: ***
+2026-06-22T10:44:40.7819718Z ##[endgroup]
+2026-06-22T10:44:41.5775203Z 
+2026-06-22T10:44:41.5776062Z [0m[1mInitializing the backend...[0m
+2026-06-22T10:44:42.8651783Z [0m[32m
+2026-06-22T10:44:42.8652709Z Successfully configured the backend "azurerm"! Terraform will automatically
+2026-06-22T10:44:42.8653977Z use this backend unless the backend configuration changes.[0m
+2026-06-22T10:44:43.3822132Z [0m[1mInitializing modules...[0m
+2026-06-22T10:44:43.3832287Z Downloading git::https://github.com/SmartProject2020/terraform-az-modules.git?ref=poc for fileshare...
+2026-06-22T10:44:44.0967623Z - fileshare in .terraform/modules/fileshare/Fileshare
+2026-06-22T10:44:44.0968943Z Downloading git::https://github.com/SmartProject2020/terraform-az-modules.git?ref=poc for host_pool...
+2026-06-22T10:44:44.0998902Z - host_pool in .terraform/modules/host_pool/Avd/HostPool
+2026-06-22T10:44:44.1001218Z Downloading git::https://github.com/SmartProject2020/terraform-az-modules.git?ref=poc for storage_account...
+2026-06-22T10:44:44.1033165Z - storage_account in .terraform/modules/storage_account/StorageAccount
+2026-06-22T10:44:44.1035425Z Downloading git::https://github.com/SmartProject2020/terraform-az-modules.git?ref=poc for subnet...
+2026-06-22T10:44:44.1071190Z - subnet in .terraform/modules/subnet/Avd/Subnet
+2026-06-22T10:44:44.1084507Z 
+2026-06-22T10:44:44.1085410Z [0m[1mInitializing provider plugins...[0m
+2026-06-22T10:44:44.1086131Z - Finding hashicorp/azurerm versions matching ">= 3.53.0"...
+2026-06-22T10:44:44.2517529Z - Finding hashicorp/time versions matching ">= 0.9.0"...
+2026-06-22T10:44:44.2985532Z - Finding hashicorp/azuread versions matching ">= 3.0.0"...
+2026-06-22T10:44:44.3400156Z - Finding hashicorp/random versions matching ">= 3.4.0"...
+2026-06-22T10:44:44.5942399Z - Installing hashicorp/azurerm v4.78.0...
+2026-06-22T10:44:46.3296618Z - Installed hashicorp/azurerm v4.78.0 (signed by HashiCorp)
+2026-06-22T10:44:46.5592666Z - Installing hashicorp/time v0.14.0...
+2026-06-22T10:44:46.9768964Z - Installed hashicorp/time v0.14.0 (signed by HashiCorp)
+2026-06-22T10:44:47.1896842Z - Installing hashicorp/azuread v3.9.0...
+2026-06-22T10:44:47.7953823Z - Installed hashicorp/azuread v3.9.0 (signed by HashiCorp)
+2026-06-22T10:44:47.9641016Z - Installing hashicorp/random v3.9.0...
+2026-06-22T10:44:48.3463779Z - Installed hashicorp/random v3.9.0 (signed by HashiCorp)
+2026-06-22T10:44:48.3466152Z 
+2026-06-22T10:44:48.3467174Z Terraform has created a lock file [1m.terraform.lock.hcl[0m to record the provider
+2026-06-22T10:44:48.3468461Z selections it made above. Include this file in your version control repository
+2026-06-22T10:44:48.3469673Z so that Terraform can guarantee to make the same selections by default when
+2026-06-22T10:44:48.3470798Z you run "terraform init" in the future.[0m
+2026-06-22T10:44:48.3471296Z 
+2026-06-22T10:44:48.3471895Z [0m[1m[32mTerraform has been successfully initialized![0m[32m[0m
+2026-06-22T10:44:48.3472829Z [0m[32m
+2026-06-22T10:44:48.3473685Z You may now begin working with Terraform. Try running "terraform plan" to see
+2026-06-22T10:44:48.3475272Z any changes that are required for your infrastructure. All Terraform commands
+2026-06-22T10:44:48.3476271Z should now work.
+2026-06-22T10:44:48.3476562Z 
+2026-06-22T10:44:48.3476975Z If you ever set or change modules or backend configuration for Terraform,
+2026-06-22T10:44:48.3478014Z rerun this command to reinitialize your working directory. If you forget, other
+2026-06-22T10:44:48.3479033Z commands will detect it and remind you to do so if necessary.[0m
+2026-06-22T10:44:49.8746195Z ##[error]Terraform exited with code 1.
+2026-06-22T10:44:51.6568970Z [0m[32mSwitched to workspace "EM50-POC-AVD00-hostpool-MADMSYS1".[0m
+2026-06-22T10:44:51.6676790Z ##[group]Run set -euo pipefail
+2026-06-22T10:44:51.6677181Z [36;1mset -euo pipefail[0m
+2026-06-22T10:44:51.6677626Z [36;1mRG=$(echo "EM50-NPR-AVD00-POC-RG01" | tr '[:lower:]' '[:upper:]')[0m
+2026-06-22T10:44:51.6678164Z [36;1mHP=$(echo "MADMSYS1" | tr '[:lower:]' '[:upper:]')[0m
+2026-06-22T10:44:51.6678606Z [36;1mecho "rg=$RG" >> "$GITHUB_OUTPUT"[0m
+2026-06-22T10:44:51.6678979Z [36;1mecho "hp=$HP" >> "$GITHUB_OUTPUT"[0m
+2026-06-22T10:44:51.6679369Z [36;1mecho "RG=$RG | HostPool=$HP"[0m
+2026-06-22T10:44:51.6698143Z shell: /usr/bin/bash -e {0}
+2026-06-22T10:44:51.6698493Z env:
+2026-06-22T10:44:51.6698810Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:51.6699257Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:51.6699684Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:51.6700052Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:51.6700345Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:51.6700632Z   TF_VAR_ENV: POC
+2026-06-22T10:44:51.6700969Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:51.6701429Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:51.6701766Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:51.6702082Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:51.6702387Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:51.6702691Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:51.6703003Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:51.6703311Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:51.6703607Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:51.6704080Z   TERRAFORM_CLI_PATH: /home/runner/work/_temp/dc62adc6-b130-4a05-b275-bee128efceef
+2026-06-22T10:44:51.6704547Z ##[endgroup]
+2026-06-22T10:44:51.6771699Z RG=EM50-NPR-AVD00-POC-RG01 | HostPool=MADMSYS1
+2026-06-22T10:44:51.6800051Z ##[group]Run set -euo pipefail
+2026-06-22T10:44:51.6800939Z [36;1mset -euo pipefail[0m
+2026-06-22T10:44:51.6801330Z [36;1mSUB="33e1047f-3638-4d90-a433-145522e18317"[0m
+2026-06-22T10:44:51.6801756Z [36;1mRG_NAME="EM50-NPR-AVD00-POC-RG01"[0m
+2026-06-22T10:44:51.6802152Z [36;1mHP_NAME="MADMSYS1"[0m
+2026-06-22T10:44:51.6802470Z [36;1m[0m
+2026-06-22T10:44:51.6802798Z [36;1mRG_ADDR="module.rg.azurerm_resource_group.rg"[0m
+2026-06-22T10:44:51.6803300Z [36;1mHP_ADDR="module.host_pool.azurerm_virtual_desktop_host_pool.this"[0m
+2026-06-22T10:44:51.6803933Z [36;1mREG_ADDR="module.host_pool.azurerm_virtual_desktop_host_pool_registration_info.this"[0m
+2026-06-22T10:44:51.6804436Z [36;1m[0m
+2026-06-22T10:44:51.6805241Z [36;1mstate_id() {[0m
+2026-06-22T10:44:51.6805775Z [36;1m  terraform state show "$1" 2>/dev/null | grep "^.*id " | head -1 | sed -E 's/.*= *"([^"]+)".*/\1/' || echo ""[0m
+2026-06-22T10:44:51.6806303Z [36;1m}[0m
+2026-06-22T10:44:51.6806576Z [36;1m[0m
+2026-06-22T10:44:51.6807053Z [36;1m# ── Migration : RG etait gere, maintenant data source — purge state ──[0m
+2026-06-22T10:44:51.6807594Z [36;1mif terraform state list | grep -qF "$RG_ADDR"; then[0m
+2026-06-22T10:44:51.6808196Z [36;1m  echo "RG present dans le state (ancienne version) -> suppression sans destroy Azure"[0m
+2026-06-22T10:44:51.6808744Z [36;1m  terraform state rm "$RG_ADDR" || true[0m
+2026-06-22T10:44:51.6809118Z [36;1mfi[0m
+2026-06-22T10:44:51.6809397Z [36;1m[0m
+2026-06-22T10:44:51.6809808Z [36;1m# ── Host Pool ────────────────────────────────────────────────────────[0m
+2026-06-22T10:44:51.6810433Z [36;1m# az resource show renvoie l'id avec une casse (resourcegroups/hostpools)[0m
+2026-06-22T10:44:51.6811058Z [36;1m# incompatible avec le parseur d'ID du provider azurerm (resourceGroups/hostPools).[0m
+2026-06-22T10:44:51.6811700Z [36;1m# On l'utilise uniquement pour verifier l'existence, et on reconstruit l'ID[0m
+2026-06-22T10:44:51.6812289Z [36;1m# avec la casse canonique attendue par terraform import / le state.[0m
+2026-06-22T10:44:51.6812762Z [36;1mHP_EXISTS=$(az resource show \[0m
+2026-06-22T10:44:51.6813236Z [36;1m  --resource-type "Microsoft.DesktopVirtualization/hostPools" \[0m
+2026-06-22T10:44:51.6813703Z [36;1m  --name "$HP_NAME" \[0m
+2026-06-22T10:44:51.6814059Z [36;1m  --resource-group "$RG_NAME" \[0m
+2026-06-22T10:44:51.6814443Z [36;1m  --subscription "$SUB" \[0m
+2026-06-22T10:44:51.6815022Z [36;1m  --query "id" -o tsv 2>/dev/null || echo "")[0m
+2026-06-22T10:44:51.6815395Z [36;1m[0m
+2026-06-22T10:44:51.6815684Z [36;1mif [ -n "$HP_EXISTS" ]; then[0m
+2026-06-22T10:44:51.6816331Z [36;1m  HP_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/hostPools/${HP_NAME}"[0m
+2026-06-22T10:44:51.6817011Z [36;1m  echo "Host Pool existe : $HP_ID"[0m
+2026-06-22T10:44:51.6817381Z [36;1m[0m
+2026-06-22T10:44:51.6817726Z [36;1m  if terraform state list | grep -qF "$HP_ADDR"; then[0m
+2026-06-22T10:44:51.6818173Z [36;1m    STATE_HP_ID=$(state_id "$HP_ADDR")[0m
+2026-06-22T10:44:51.6818633Z [36;1m    if [ -n "$STATE_HP_ID" ] && [ "$STATE_HP_ID" != "$HP_ID" ]; then[0m
+2026-06-22T10:44:51.6819170Z [36;1m      echo "Host Pool dans le state different -> nettoyage + reimport"[0m
+2026-06-22T10:44:51.6819650Z [36;1m      terraform state rm "$HP_ADDR"  || true[0m
+2026-06-22T10:44:51.6820258Z [36;1m      terraform state rm "$REG_ADDR" || true[0m
+2026-06-22T10:44:51.6820837Z [36;1m      terraform import -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" "$HP_ADDR" "$HP_ID"[0m
+2026-06-22T10:44:51.6821387Z [36;1m    else[0m
+2026-06-22T10:44:51.6821791Z [36;1m      echo "Host Pool deja dans le state avec le bon ID. Import ignore."[0m
+2026-06-22T10:44:51.6822226Z [36;1m    fi[0m
+2026-06-22T10:44:51.6822504Z [36;1m  else[0m
+2026-06-22T10:44:51.6822825Z [36;1m    echo "Import Host Pool dans le state..."[0m
+2026-06-22T10:44:51.6823494Z [36;1m    terraform import -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" "$HP_ADDR" "$HP_ID"[0m
+2026-06-22T10:44:51.6824016Z [36;1m  fi[0m
+2026-06-22T10:44:51.6824287Z [36;1m[0m
+2026-06-22T10:44:51.6824808Z [36;1m  # Le sous-objet registration info partage l'ID du Host Pool[0m
+2026-06-22T10:44:51.6825371Z [36;1m  if terraform state list | grep -qF "$REG_ADDR"; then[0m
+2026-06-22T10:44:51.6825887Z [36;1m    echo "Registration info deja dans le state. Import ignore."[0m
+2026-06-22T10:44:51.6826322Z [36;1m  else[0m
+2026-06-22T10:44:51.6826673Z [36;1m    echo "Import registration info dans le state..."[0m
+2026-06-22T10:44:51.6827292Z [36;1m    terraform import -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" "$REG_ADDR" "$HP_ID" || \[0m
+2026-06-22T10:44:51.6828071Z [36;1m      echo "::warning::Import registration info echoue — sera potentiellement recreee (nouveau token)"[0m
+2026-06-22T10:44:51.6828611Z [36;1m  fi[0m
+2026-06-22T10:44:51.6828900Z [36;1melse[0m
+2026-06-22T10:44:51.6829244Z [36;1m  echo "Host Pool absent — sera cree par Terraform."[0m
+2026-06-22T10:44:51.6829666Z [36;1mfi[0m
+2026-06-22T10:44:51.6829946Z [36;1m[0m
+2026-06-22T10:44:51.6830325Z [36;1m# ── Mot de passe admin local (Key Vault) ──────────────────────────[0m
+2026-06-22T10:44:51.6830787Z [36;1mPLAQUE="EM50"[0m
+2026-06-22T10:44:51.6831102Z [36;1mSETTING="NPR"[0m
+2026-06-22T10:44:51.6831429Z [36;1mKV_INPUT=""[0m
+2026-06-22T10:44:51.6831744Z [36;1mKV_RG_INPUT=""[0m
+2026-06-22T10:44:51.6832140Z [36;1mKV_NAME="${KV_INPUT:-${PLAQUE}-${SETTING}-AVD00-KV01}"[0m
+2026-06-22T10:44:51.6832654Z [36;1mKV_RG="${KV_RG_INPUT:-${PLAQUE}-${SETTING}-AVD00-${SETTING}-RG01}"[0m
+2026-06-22T10:44:51.6833131Z [36;1mSECRET_NAME="avdlocaladmin-${HP_NAME}"[0m
+2026-06-22T10:44:51.6833530Z [36;1mRAND_ADDR="random_password.admin"[0m
+2026-06-22T10:44:51.6833941Z [36;1mSECRET_ADDR="azurerm_key_vault_secret.admin"[0m
+2026-06-22T10:44:51.6834319Z [36;1m[0m
+2026-06-22T10:44:51.6834718Z [36;1mif KV_PW=$(az keyvault secret show \[0m
+2026-06-22T10:44:51.6835198Z [36;1m  --vault-name "$KV_NAME" \[0m
+2026-06-22T10:44:51.6835568Z [36;1m  --name "$SECRET_NAME" \[0m
+2026-06-22T10:44:51.6835966Z [36;1m  --query value -o tsv 2>/dev/null); then[0m
+2026-06-22T10:44:51.6836335Z [36;1m[0m
+2026-06-22T10:44:51.6836630Z [36;1m  echo "::add-mask::$KV_PW"[0m
+2026-06-22T10:44:51.6837123Z [36;1m  echo "Secret '$SECRET_NAME' present dans le Key Vault '$KV_NAME' -> import..."[0m
+2026-06-22T10:44:51.6837607Z [36;1m[0m
+2026-06-22T10:44:51.6837887Z [36;1m  KV_ID=$(az keyvault show \[0m
+2026-06-22T10:44:51.6838252Z [36;1m    --name "$KV_NAME" \[0m
+2026-06-22T10:44:51.6838623Z [36;1m    --resource-group "$KV_RG" \[0m
+2026-06-22T10:44:51.6838984Z [36;1m    --query id -o tsv)[0m
+2026-06-22T10:44:51.6839365Z [36;1m  SECRET_ID="${KV_ID}/secrets/${SECRET_NAME}"[0m
+2026-06-22T10:44:51.6839735Z [36;1m[0m
+2026-06-22T10:44:51.6840095Z [36;1m  if ! terraform state list | grep -qF "$SECRET_ADDR"; then[0m
+2026-06-22T10:44:51.6840752Z [36;1m    terraform import -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" "$SECRET_ADDR" "$SECRET_ID"[0m
+2026-06-22T10:44:51.6841314Z [36;1m  else[0m
+2026-06-22T10:44:51.6841657Z [36;1m    echo "Secret deja dans le state. Import ignore."[0m
+2026-06-22T10:44:51.6842050Z [36;1m  fi[0m
+2026-06-22T10:44:51.6842339Z [36;1m[0m
+2026-06-22T10:44:51.6842682Z [36;1m  if ! terraform state list | grep -qF "$RAND_ADDR"; then[0m
+2026-06-22T10:44:51.6843374Z [36;1m    # random_password supporte l'import depuis hashicorp/random >= 3.4.0[0m
+2026-06-22T10:44:51.6843934Z [36;1m    # Format : "<ID>" = virgule suivie de la valeur du mot de passe[0m
+2026-06-22T10:44:51.6844576Z [36;1m    terraform import -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" "$RAND_ADDR" ",$KV_PW"[0m
+2026-06-22T10:44:51.6845275Z [36;1m  else[0m
+2026-06-22T10:44:51.6845654Z [36;1m    echo "random_password deja dans le state. Import ignore."[0m
+2026-06-22T10:44:51.6846080Z [36;1m  fi[0m
+2026-06-22T10:44:51.6846432Z [36;1melse[0m
+2026-06-22T10:44:51.6846955Z [36;1m  echo "Secret '$SECRET_NAME' absent du KV '$KV_NAME' -> sera cree par Terraform."[0m
+2026-06-22T10:44:51.6847436Z [36;1mfi[0m
+2026-06-22T10:44:51.6847701Z [36;1m[0m
+2026-06-22T10:44:51.6848109Z [36;1m# ── Groupes Entra ID (Task #6) ────────────────────────────────────[0m
+2026-06-22T10:44:51.6848704Z [36;1m# Prerequis : le SP OIDC doit avoir Group.ReadWrite.All (Microsoft Graph)[0m
+2026-06-22T10:44:51.6849243Z [36;1mGROUP_USERS_NAME="CB-GO-AVD${HP_NAME}-USERS"[0m
+2026-06-22T10:44:51.6849630Z [36;1m[0m
+2026-06-22T10:44:51.6850109Z [36;1mGROUP_USERS_ID=$(az ad group show --group "$GROUP_USERS_NAME" --query id -o tsv 2>/dev/null || echo "")[0m
+2026-06-22T10:44:51.6850682Z [36;1mif [ -n "$GROUP_USERS_ID" ]; then[0m
+2026-06-22T10:44:51.6851138Z [36;1m  if ! terraform state list | grep -qF "azuread_group.users"; then[0m
+2026-06-22T10:44:51.6851635Z [36;1m    echo "Import groupe $GROUP_USERS_NAME..."[0m
+2026-06-22T10:44:51.6852294Z [36;1m    terraform import -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" "azuread_group.users" "$GROUP_USERS_ID"[0m
+2026-06-22T10:44:51.6852908Z [36;1m  else[0m
+2026-06-22T10:44:51.6853319Z [36;1m    echo "Groupe $GROUP_USERS_NAME deja dans le state. Import ignore."[0m
+2026-06-22T10:44:51.6853768Z [36;1m  fi[0m
+2026-06-22T10:44:51.6854048Z [36;1melse[0m
+2026-06-22T10:44:51.6854437Z [36;1m  echo "Groupe $GROUP_USERS_NAME absent — sera cree par Terraform."[0m
+2026-06-22T10:44:51.6855045Z [36;1mfi[0m
+2026-06-22T10:44:51.6855324Z [36;1m[0m
+2026-06-22T10:44:51.6855731Z [36;1m# ── AppGroup (Task #7) ────────────────────────────────────────────[0m
+2026-06-22T10:44:51.6856206Z [36;1mDAG_NAME="${HP_NAME}-DAG"[0m
+2026-06-22T10:44:51.6856579Z [36;1mDAG_EXISTS=$(az resource show \[0m
+2026-06-22T10:44:51.6857081Z [36;1m  --resource-type "Microsoft.DesktopVirtualization/applicationGroups" \[0m
+2026-06-22T10:44:51.6857686Z [36;1m  --name "$DAG_NAME" --resource-group "$RG_NAME" --subscription "$SUB" \[0m
+2026-06-22T10:44:51.6858188Z [36;1m  --query id -o tsv 2>/dev/null || echo "")[0m
+2026-06-22T10:44:51.6858593Z [36;1mif [ -n "$DAG_EXISTS" ]; then[0m
+2026-06-22T10:44:51.6859272Z [36;1m  DAG_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/applicationGroups/${DAG_NAME}"[0m
+2026-06-22T10:44:51.6860118Z [36;1m  if ! terraform state list | grep -qF "azurerm_virtual_desktop_application_group.dag"; then[0m
+2026-06-22T10:44:51.6860689Z [36;1m    echo "Import AppGroup $DAG_NAME..."[0m
+2026-06-22T10:44:51.6861382Z [36;1m    terraform import -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" "azurerm_virtual_desktop_application_group.dag" "$DAG_ID"[0m
+2026-06-22T10:44:51.6862037Z [36;1m  else[0m
+2026-06-22T10:44:51.6862432Z [36;1m    echo "AppGroup $DAG_NAME deja dans le state. Import ignore."[0m
+2026-06-22T10:44:51.6862898Z [36;1m  fi[0m
+2026-06-22T10:44:51.6863179Z [36;1melse[0m
+2026-06-22T10:44:51.6863551Z [36;1m  echo "AppGroup $DAG_NAME absent — sera cree par Terraform."[0m
+2026-06-22T10:44:51.6863989Z [36;1m  DAG_ID=""[0m
+2026-06-22T10:44:51.6864284Z [36;1mfi[0m
+2026-06-22T10:44:51.6864567Z [36;1m[0m
+2026-06-22T10:44:51.6865109Z [36;1m# ── Workspace (Task #7) ───────────────────────────────────────────[0m
+2026-06-22T10:44:51.6865607Z [36;1mWS_NAME="${HP_NAME}"[0m
+2026-06-22T10:44:51.6865959Z [36;1mWS_EXISTS=$(az resource show \[0m
+2026-06-22T10:44:51.6866440Z [36;1m  --resource-type "Microsoft.DesktopVirtualization/workspaces" \[0m
+2026-06-22T10:44:51.6867148Z [36;1m  --name "$WS_NAME" --resource-group "$RG_NAME" --subscription "$SUB" \[0m
+2026-06-22T10:44:51.6867648Z [36;1m  --query id -o tsv 2>/dev/null || echo "")[0m
+2026-06-22T10:44:51.6868060Z [36;1mif [ -n "$WS_EXISTS" ]; then[0m
+2026-06-22T10:44:51.6868707Z [36;1m  WS_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/workspaces/${WS_NAME}"[0m
+2026-06-22T10:44:51.6869492Z [36;1m  if ! terraform state list | grep -qF "azurerm_virtual_desktop_workspace.ws"; then[0m
+2026-06-22T10:44:51.6870083Z [36;1m    echo "Import Workspace $WS_NAME..."[0m
+2026-06-22T10:44:51.6870745Z [36;1m    terraform import -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" "azurerm_virtual_desktop_workspace.ws" "$WS_ID"[0m
+2026-06-22T10:44:51.6871360Z [36;1m  else[0m
+2026-06-22T10:44:51.6871740Z [36;1m    echo "Workspace $WS_NAME deja dans le state. Import ignore."[0m
+2026-06-22T10:44:51.6872176Z [36;1m  fi[0m
+2026-06-22T10:44:51.6872448Z [36;1m[0m
+2026-06-22T10:44:51.6872760Z [36;1m  # Association Workspace <-> AppGroup[0m
+2026-06-22T10:44:51.6873140Z [36;1m  if [ -n "$DAG_ID" ]; then[0m
+2026-06-22T10:44:51.6873527Z [36;1m    WS_DAG_IMPORT_ID="${WS_ID}|${DAG_ID}"[0m
+2026-06-22T10:44:51.6874167Z [36;1m    if ! terraform state list | grep -qF "azurerm_virtual_desktop_workspace_application_group_association.ws_dag"; then[0m
+2026-06-22T10:44:51.6875017Z [36;1m      echo "Import association Workspace/AppGroup..."[0m
+2026-06-22T10:44:51.6875587Z [36;1m      terraform import -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" \[0m
+2026-06-22T10:44:51.6876305Z [36;1m        "azurerm_virtual_desktop_workspace_application_group_association.ws_dag" "$WS_DAG_IMPORT_ID" || \[0m
+2026-06-22T10:44:51.6877102Z [36;1m        echo "::warning::Import association Workspace/AppGroup echoue — sera potentiellement recree"[0m
+2026-06-22T10:44:51.6877658Z [36;1m    else[0m
+2026-06-22T10:44:51.6878101Z [36;1m      echo "Association Workspace/AppGroup deja dans le state. Import ignore."[0m
+2026-06-22T10:44:51.6878576Z [36;1m    fi[0m
+2026-06-22T10:44:51.6878851Z [36;1m  fi[0m
+2026-06-22T10:44:51.6879128Z [36;1melse[0m
+2026-06-22T10:44:51.6879499Z [36;1m  echo "Workspace $WS_NAME absent — sera cree par Terraform."[0m
+2026-06-22T10:44:51.6879919Z [36;1mfi[0m
+2026-06-22T10:44:51.6880179Z [36;1m[0m
+2026-06-22T10:44:51.6880568Z [36;1m# ── ScalingPlan (Task #7, Pooled uniquement) ──────────────────────[0m
+2026-06-22T10:44:51.6881020Z [36;1mif [ "M" = "M" ]; then[0m
+2026-06-22T10:44:51.6881361Z [36;1m  SP_NAME="${HP_NAME}-SP"[0m
+2026-06-22T10:44:51.6881723Z [36;1m  SP_EXISTS=$(az resource show \[0m
+2026-06-22T10:44:51.6882215Z [36;1m    --resource-type "Microsoft.DesktopVirtualization/scalingPlans" \[0m
+2026-06-22T10:44:51.6882803Z [36;1m    --name "$SP_NAME" --resource-group "$RG_NAME" --subscription "$SUB" \[0m
+2026-06-22T10:44:51.6883301Z [36;1m    --query id -o tsv 2>/dev/null || echo "")[0m
+2026-06-22T10:44:51.6883710Z [36;1m  if [ -n "$SP_EXISTS" ]; then[0m
+2026-06-22T10:44:51.6884364Z [36;1m    SP_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/scalingPlans/${SP_NAME}"[0m
+2026-06-22T10:44:51.6885439Z [36;1m    if ! terraform state list | grep -qF "azurerm_virtual_desktop_scaling_plan.sp[0]"; then[0m
+2026-06-22T10:44:51.6886030Z [36;1m      echo "Import ScalingPlan $SP_NAME..."[0m
+2026-06-22T10:44:51.6886548Z [36;1m      terraform import -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" \[0m
+2026-06-22T10:44:51.6887120Z [36;1m        'azurerm_virtual_desktop_scaling_plan.sp[0]' "$SP_ID"[0m
+2026-06-22T10:44:51.6887532Z [36;1m    else[0m
+2026-06-22T10:44:51.6887942Z [36;1m      echo "ScalingPlan $SP_NAME deja dans le state. Import ignore."[0m
+2026-06-22T10:44:51.6888374Z [36;1m    fi[0m
+2026-06-22T10:44:51.6888652Z [36;1m  else[0m
+2026-06-22T10:44:51.6889035Z [36;1m    echo "ScalingPlan $SP_NAME absent — sera cree par Terraform."[0m
+2026-06-22T10:44:51.6889587Z [36;1m  fi[0m
+2026-06-22T10:44:51.6889861Z [36;1mfi[0m
+2026-06-22T10:44:51.6906959Z shell: /usr/bin/bash -e {0}
+2026-06-22T10:44:51.6907294Z env:
+2026-06-22T10:44:51.6907625Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:44:51.6908073Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:44:51.6908506Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:44:51.6908869Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:44:51.6909166Z   TF_VAR_SETTING: NPR
+2026-06-22T10:44:51.6909453Z   TF_VAR_ENV: POC
+2026-06-22T10:44:51.6909750Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:44:51.6910161Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:44:51.6910500Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:44:51.6910815Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:44:51.6911117Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:44:51.6911424Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:44:51.6911743Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:44:51.6912055Z   TF_VAR_KV_NAME: 
+2026-06-22T10:44:51.6912373Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:44:51.6912850Z   TERRAFORM_CLI_PATH: /home/runner/work/_temp/dc62adc6-b130-4a05-b275-bee128efceef
+2026-06-22T10:44:51.6913321Z   ARM_USE_OIDC: true
+2026-06-22T10:44:51.6913664Z   ARM_TENANT_ID: 14f45d39-b147-4ed8-885d-ee9a1ca2bd85
+2026-06-22T10:44:51.6914100Z   ARM_SUBSCRIPTION_ID: 33e1047f-3638-4d90-a433-145522e18317
+2026-06-22T10:44:51.6914799Z   ARM_CLIENT_ID: ***
+2026-06-22T10:44:51.6915195Z ##[endgroup]
+2026-06-22T10:44:55.6737154Z Host Pool absent — sera cree par Terraform.
+2026-06-22T10:45:02.9883337Z Secret 'avdlocaladmin-MADMSYS1' absent du KV 'EM50-NPR-AVD00-KV01' -> sera cree par Terraform.
+2026-06-22T10:45:04.0899455Z Groupe CB-GO-AVDMADMSYS1-USERS absent — sera cree par Terraform.
+2026-06-22T10:45:05.1333136Z AppGroup MADMSYS1-DAG absent — sera cree par Terraform.
+2026-06-22T10:45:06.3602470Z Workspace MADMSYS1 absent — sera cree par Terraform.
+2026-06-22T10:45:07.6515582Z ScalingPlan MADMSYS1-SP absent — sera cree par Terraform.
+2026-06-22T10:45:07.6583865Z ##[group]Run terraform plan -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" -out="EM50-POC-AVD00-MADMSYS1.tfplan"
+2026-06-22T10:45:07.6585734Z [36;1mterraform plan -var-file="vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars" -out="EM50-POC-AVD00-MADMSYS1.tfplan"[0m
+2026-06-22T10:45:07.6614786Z shell: /usr/bin/bash -e {0}
+2026-06-22T10:45:07.6615392Z env:
+2026-06-22T10:45:07.6615959Z   TF_WORKSPACE: EM50-POC-AVD00-hostpool-MADMSYS1
+2026-06-22T10:45:07.6616750Z   TF_VARFILE: vars/EM50-NPR-AVD00-POC-MADMSYS1.tfvars
+2026-06-22T10:45:07.6617562Z   TF_PLANFILE: EM50-POC-AVD00-MADMSYS1.tfplan
+2026-06-22T10:45:07.6618251Z   TF_VAR_PLAQUE: EM50
+2026-06-22T10:45:07.6618799Z   TF_VAR_SETTING: NPR
+2026-06-22T10:45:07.6619337Z   TF_VAR_ENV: POC
+2026-06-22T10:45:07.6619863Z   TF_VAR_APPLICATION_ID: AVD00
+2026-06-22T10:45:07.6620490Z   TF_VAR_RESOURCE_GROUP_INC: 01
+2026-06-22T10:45:07.6621104Z   TF_VAR_NETWORK_ZONE: standard
+2026-06-22T10:45:07.6621706Z   TF_VAR_POOL_TYPE: M
+2026-06-22T10:45:07.6622316Z   TF_VAR_POOL_ID: ADMSYS
+2026-06-22T10:45:07.6622889Z   TF_VAR_POOL_VERSION: 1
+2026-06-22T10:45:07.6623474Z   TF_VAR_FSLOGIX_QUOTA_GB: 100
+2026-06-22T10:45:07.6624058Z   TF_VAR_KV_NAME: 
+2026-06-22T10:45:07.6624606Z   TF_VAR_KV_RESOURCE_GROUP_NAME: 
+2026-06-22T10:45:07.6625614Z   TERRAFORM_CLI_PATH: /home/runner/work/_temp/dc62adc6-b130-4a05-b275-bee128efceef
+2026-06-22T10:45:07.6626529Z   ARM_USE_OIDC: true
+2026-06-22T10:45:07.6627131Z   ARM_TENANT_ID: 14f45d39-b147-4ed8-885d-ee9a1ca2bd85
+2026-06-22T10:45:07.6627953Z   ARM_SUBSCRIPTION_ID: 33e1047f-3638-4d90-a433-145522e18317
+2026-06-22T10:45:07.6628893Z   ARM_CLIENT_ID: ***
+2026-06-22T10:45:07.6629418Z ##[endgroup]
+2026-06-22T10:45:14.3421090Z [0m[1mdata.azurerm_resource_group.rg: Reading...[0m[0m
+2026-06-22T10:45:14.3424821Z [0m[1mdata.azurerm_key_vault.avd: Reading...[0m[0m
+2026-06-22T10:45:14.3425474Z [0m[1mmodule.subnet.data.azurerm_resource_group.vnet_rg: Reading...[0m[0m
+2026-06-22T10:45:14.5649443Z [0m[1mdata.azurerm_resource_group.rg: Read complete after 1s [id=/subscriptions/33e1047f-3638-4d90-a433-145522e18317/resourceGroups/EM50-NPR-AVD00-POC-RG01][0m
+2026-06-22T10:45:14.5665956Z [0m[1mmodule.host_pool.data.azurerm_resource_group.rg: Reading...[0m[0m
+2026-06-22T10:45:14.5667111Z [0m[1mmodule.storage_account.data.azurerm_resource_group.rg: Reading...[0m[0m
+2026-06-22T10:45:14.9389843Z [0m[1mmodule.subnet.data.azurerm_resource_group.vnet_rg: Read complete after 1s [id=/subscriptions/33e1047f-3638-4d90-a433-145522e18317/resourceGroups/EM50-NPR-AVDAZ-TST-RG01][0m
+2026-06-22T10:45:14.9409127Z [0m[1mmodule.subnet.data.azurerm_virtual_network.vnet: Reading...[0m[0m
+2026-06-22T10:45:15.2314421Z [0m[1mmodule.host_pool.data.azurerm_resource_group.rg: Read complete after 0s [id=/subscriptions/33e1047f-3638-4d90-a433-145522e18317/resourceGroups/EM50-NPR-AVD00-POC-RG01][0m
+2026-06-22T10:45:15.2826720Z [0m[1mmodule.storage_account.data.azurerm_resource_group.rg: Read complete after 0s [id=/subscriptions/33e1047f-3638-4d90-a433-145522e18317/resourceGroups/EM50-NPR-AVD00-POC-RG01][0m
+2026-06-22T10:45:15.5581244Z [0m[1mmodule.subnet.data.azurerm_virtual_network.vnet: Read complete after 1s [id=/subscriptions/33e1047f-3638-4d90-a433-145522e18317/resourceGroups/EM50-NPR-AVDAZ-TST-RG01/providers/Microsoft.Network/virtualNetworks/EM50-NPR-AVDAZ-VNET01][0m
+2026-06-22T10:45:15.5860919Z 
+2026-06-22T10:45:15.5862079Z Terraform used the selected providers to generate the following execution
+2026-06-22T10:45:15.5863152Z plan. Resource actions are indicated with the following symbols:
+2026-06-22T10:45:15.5864287Z   [32m+[0m create[0m
+2026-06-22T10:45:15.5864879Z 
+2026-06-22T10:45:15.5865363Z Terraform planned the following actions, but then encountered a problem:
+2026-06-22T10:45:15.5866071Z 
+2026-06-22T10:45:15.5866516Z [1m  # azuread_group.users[0m will be created
+2026-06-22T10:45:15.5867461Z [0m  [32m+[0m[0m resource "azuread_group" "users" {
+2026-06-22T10:45:15.5868984Z       [32m+[0m[0m auto_subscribe_new_members     = (known after apply)
+2026-06-22T10:45:15.5870128Z       [32m+[0m[0m display_name                   = "CB-GO-AVDMADMSYS1-USERS"
+2026-06-22T10:45:15.5871177Z       [32m+[0m[0m external_senders_allowed       = (known after apply)
+2026-06-22T10:45:15.5872258Z       [32m+[0m[0m hide_from_address_lists        = (known after apply)
+2026-06-22T10:45:15.5873375Z       [32m+[0m[0m hide_from_outlook_clients      = (known after apply)
+2026-06-22T10:45:15.5874401Z       [32m+[0m[0m id                             = (known after apply)
+2026-06-22T10:45:15.5875376Z       [32m+[0m[0m mail                           = (known after apply)
+2026-06-22T10:45:15.5876338Z       [32m+[0m[0m mail_nickname                  = "cb-go-avdmadmsys1-users"
+2026-06-22T10:45:15.5877330Z       [32m+[0m[0m members                        = (known after apply)
+2026-06-22T10:45:15.5878226Z       [32m+[0m[0m object_id                      = (known after apply)
+2026-06-22T10:45:15.5879236Z       [32m+[0m[0m onpremises_domain_name         = (known after apply)
+2026-06-22T10:45:15.5880154Z       [32m+[0m[0m onpremises_group_type          = (known after apply)
+2026-06-22T10:45:15.5881016Z       [32m+[0m[0m onpremises_netbios_name        = (known after apply)
+2026-06-22T10:45:15.5881974Z       [32m+[0m[0m onpremises_sam_account_name    = (known after apply)
+2026-06-22T10:45:15.5882865Z       [32m+[0m[0m onpremises_security_identifier = (known after apply)
+2026-06-22T10:45:15.5883848Z       [32m+[0m[0m onpremises_sync_enabled        = (known after apply)
+2026-06-22T10:45:15.5884858Z       [32m+[0m[0m owners                         = (known after apply)
+2026-06-22T10:45:15.5885424Z       [32m+[0m[0m preferred_language             = (known after apply)
+2026-06-22T10:45:15.5885925Z       [32m+[0m[0m prevent_duplicate_names        = false
+2026-06-22T10:45:15.5886456Z       [32m+[0m[0m proxy_addresses                = (known after apply)
+2026-06-22T10:45:15.5886961Z       [32m+[0m[0m security_enabled               = true
+2026-06-22T10:45:15.5887670Z       [32m+[0m[0m visibility                     = (known after apply)
+2026-06-22T10:45:15.5888170Z       [32m+[0m[0m writeback_enabled              = false
+2026-06-22T10:45:15.5888554Z     }
+2026-06-22T10:45:15.5888706Z 
+2026-06-22T10:45:15.5888940Z [1m  # azurerm_role_assignment.dvd_user[0m will be created
+2026-06-22T10:45:15.5889466Z [0m  [32m+[0m[0m resource "azurerm_role_assignment" "dvd_user" {
+2026-06-22T10:45:15.5890025Z       [32m+[0m[0m condition_version                = (known after apply)
+2026-06-22T10:45:15.5890551Z       [32m+[0m[0m id                               = (known after apply)
+2026-06-22T10:45:15.5891058Z       [32m+[0m[0m name                             = (known after apply)
+2026-06-22T10:45:15.5891599Z       [32m+[0m[0m principal_id                     = (known after apply)
+2026-06-22T10:45:15.5892125Z       [32m+[0m[0m principal_type                   = (known after apply)
+2026-06-22T10:45:15.5892658Z       [32m+[0m[0m role_definition_id               = (known after apply)
+2026-06-22T10:45:15.5893238Z       [32m+[0m[0m role_definition_name             = "Desktop Virtualization User"
+2026-06-22T10:45:15.5893809Z       [32m+[0m[0m scope                            = (known after apply)
+2026-06-22T10:45:15.5894338Z       [32m+[0m[0m skip_service_principal_aad_check = (known after apply)
+2026-06-22T10:45:15.5894930Z     }
+2026-06-22T10:45:15.5895071Z 
+2026-06-22T10:45:15.5895347Z [1m  # azurerm_role_assignment.smb_contributor[0m will be created
+2026-06-22T10:45:15.5895920Z [0m  [32m+[0m[0m resource "azurerm_role_assignment" "smb_contributor" {
+2026-06-22T10:45:15.5896477Z       [32m+[0m[0m condition_version                = (known after apply)
+2026-06-22T10:45:15.5897004Z       [32m+[0m[0m id                               = (known after apply)
+2026-06-22T10:45:15.5897661Z       [32m+[0m[0m name                             = (known after apply)
+2026-06-22T10:45:15.5898367Z       [32m+[0m[0m principal_id                     = (known after apply)
+2026-06-22T10:45:15.5899006Z       [32m+[0m[0m principal_type                   = (known after apply)
+2026-06-22T10:45:15.5899611Z       [32m+[0m[0m role_definition_id               = (known after apply)
+2026-06-22T10:45:15.5900445Z       [32m+[0m[0m role_definition_name             = "Storage File Data SMB Share Contributor"
+2026-06-22T10:45:15.5901044Z       [32m+[0m[0m scope                            = (known after apply)
+2026-06-22T10:45:15.5901585Z       [32m+[0m[0m skip_service_principal_aad_check = (known after apply)
+2026-06-22T10:45:15.5901991Z     }
+2026-06-22T10:45:15.5902140Z 
+2026-06-22T10:45:15.5902400Z [1m  # azurerm_role_assignment.vm_user_login[0m will be created
+2026-06-22T10:45:15.5902947Z [0m  [32m+[0m[0m resource "azurerm_role_assignment" "vm_user_login" {
+2026-06-22T10:45:15.5903501Z       [32m+[0m[0m condition_version                = (known after apply)
+2026-06-22T10:45:15.5904032Z       [32m+[0m[0m id                               = (known after apply)
+2026-06-22T10:45:15.5904531Z       [32m+[0m[0m name                             = (known after apply)
+2026-06-22T10:45:15.5905232Z       [32m+[0m[0m principal_id                     = (known after apply)
+2026-06-22T10:45:15.5905763Z       [32m+[0m[0m principal_type                   = (known after apply)
+2026-06-22T10:45:15.5906303Z       [32m+[0m[0m role_definition_id               = (known after apply)
+2026-06-22T10:45:15.5906882Z       [32m+[0m[0m role_definition_name             = "Virtual Machine User Login"
+2026-06-22T10:45:15.5907733Z       [32m+[0m[0m scope                            = "/subscriptions/33e1047f-3638-4d90-a433-145522e18317/resourceGroups/EM50-NPR-AVD00-POC-RG01"
+2026-06-22T10:45:15.5908491Z       [32m+[0m[0m skip_service_principal_aad_check = (known after apply)
+2026-06-22T10:45:15.5908896Z     }
+2026-06-22T10:45:15.5909043Z 
+2026-06-22T10:45:15.5909330Z [1m  # azurerm_virtual_desktop_application_group.dag[0m will be created
+2026-06-22T10:45:15.5910068Z [0m  [32m+[0m[0m resource "azurerm_virtual_desktop_application_group" "dag" {
+2026-06-22T10:45:15.5910618Z       [32m+[0m[0m host_pool_id        = (known after apply)
+2026-06-22T10:45:15.5911102Z       [32m+[0m[0m id                  = (known after apply)
+2026-06-22T10:45:15.5911584Z       [32m+[0m[0m location            = "francecentral"
+2026-06-22T10:45:15.5912048Z       [32m+[0m[0m name                = "MADMSYS1-DAG"
+2026-06-22T10:45:15.5912567Z       [32m+[0m[0m resource_group_name = "EM50-NPR-AVD00-POC-RG01"
+2026-06-22T10:45:15.5913031Z       [32m+[0m[0m tags                = {
+2026-06-22T10:45:15.5913481Z           [32m+[0m[0m "application-id"      = "AVD00"
+2026-06-22T10:45:15.5913956Z           [32m+[0m[0m "backup-policy"       = "NONPROD"
+2026-06-22T10:45:15.5914418Z           [32m+[0m[0m "managed-by"          = "terraform"
+2026-06-22T10:45:15.5915063Z           [32m+[0m[0m "module"              = "avd-hostpool"
+2026-06-22T10:45:15.5915542Z           [32m+[0m[0m "servier-environment" = "POC"
+2026-06-22T10:45:15.5915923Z         }
+2026-06-22T10:45:15.5916268Z       [32m+[0m[0m type                = "Desktop"
+2026-06-22T10:45:15.5916628Z     }
+2026-06-22T10:45:15.5916775Z 
+2026-06-22T10:45:15.5917046Z [1m  # azurerm_virtual_desktop_scaling_plan.sp[0][0m will be created
+2026-06-22T10:45:15.5917623Z [0m  [32m+[0m[0m resource "azurerm_virtual_desktop_scaling_plan" "sp" {
+2026-06-22T10:45:15.5918138Z       [32m+[0m[0m id                  = (known after apply)
+2026-06-22T10:45:15.5918597Z       [32m+[0m[0m location            = "francecentral"
+2026-06-22T10:45:15.5919052Z       [32m+[0m[0m name                = "MADMSYS1-SP"
+2026-06-22T10:45:15.5919546Z       [32m+[0m[0m resource_group_name = "EM50-NPR-AVD00-POC-RG01"
+2026-06-22T10:45:15.5920013Z       [32m+[0m[0m tags                = {
+2026-06-22T10:45:15.5920439Z           [32m+[0m[0m "application-id"      = "AVD00"
+2026-06-22T10:45:15.5920998Z           [32m+[0m[0m "backup-policy"       = "NONPROD"
+2026-06-22T10:45:15.5921461Z           [32m+[0m[0m "managed-by"          = "terraform"
+2026-06-22T10:45:15.5921933Z           [32m+[0m[0m "module"              = "avd-hostpool"
+2026-06-22T10:45:15.5922396Z           [32m+[0m[0m "servier-environment" = "POC"
+2026-06-22T10:45:15.5922770Z         }
+2026-06-22T10:45:15.5923155Z       [32m+[0m[0m time_zone           = "Romance Standard Time"
+2026-06-22T10:45:15.5923438Z 
+2026-06-22T10:45:15.5923614Z       [32m+[0m[0m host_pool {
+2026-06-22T10:45:15.5924062Z           [32m+[0m[0m hostpool_id          = (known after apply)
+2026-06-22T10:45:15.5924535Z           [32m+[0m[0m scaling_plan_enabled = true
+2026-06-22T10:45:15.5925063Z         }
+2026-06-22T10:45:15.5925212Z 
+2026-06-22T10:45:15.5925395Z       [32m+[0m[0m schedule {
+2026-06-22T10:45:15.5925820Z           [32m+[0m[0m days_of_week                         = [
+2026-06-22T10:45:15.5926254Z               [32m+[0m[0m "Friday",
+2026-06-22T10:45:15.5926657Z               [32m+[0m[0m "Monday",
+2026-06-22T10:45:15.5927041Z               [32m+[0m[0m "Thursday",
+2026-06-22T10:45:15.5927425Z               [32m+[0m[0m "Tuesday",
+2026-06-22T10:45:15.5927814Z               [32m+[0m[0m "Wednesday",
+2026-06-22T10:45:15.5928153Z             ]
+2026-06-22T10:45:15.5928544Z           [32m+[0m[0m name                                 = "Semaine"
+2026-06-22T10:45:15.5929078Z           [32m+[0m[0m off_peak_load_balancing_algorithm    = "BreadthFirst"
+2026-06-22T10:45:15.5929624Z           [32m+[0m[0m off_peak_start_time                  = "20:00"
+2026-06-22T10:45:15.5930164Z           [32m+[0m[0m peak_load_balancing_algorithm        = "BreadthFirst"
+2026-06-22T10:45:15.5930710Z           [32m+[0m[0m peak_start_time                      = "08:00"
+2026-06-22T10:45:15.5931220Z           [32m+[0m[0m ramp_down_capacity_threshold_percent = 90
+2026-06-22T10:45:15.5931741Z           [32m+[0m[0m ramp_down_force_logoff_users         = false
+2026-06-22T10:45:15.5932390Z           [32m+[0m[0m ramp_down_load_balancing_algorithm   = "BreadthFirst"
+2026-06-22T10:45:15.5932936Z           [32m+[0m[0m ramp_down_minimum_hosts_percent      = 0
+2026-06-22T10:45:15.5933723Z           [32m+[0m[0m ramp_down_notification_message       = "Votre session va etre fermee dans 30 minutes. Veuillez enregistrer votre travail."
+2026-06-22T10:45:15.5934460Z           [32m+[0m[0m ramp_down_start_time                 = "18:00"
+2026-06-22T10:45:15.5935157Z           [32m+[0m[0m ramp_down_stop_hosts_when            = "ZeroActiveSessions"
+2026-06-22T10:45:15.5935714Z           [32m+[0m[0m ramp_down_wait_time_minutes          = 30
+2026-06-22T10:45:15.5936239Z           [32m+[0m[0m ramp_up_capacity_threshold_percent   = 60
+2026-06-22T10:45:15.5936787Z           [32m+[0m[0m ramp_up_load_balancing_algorithm     = "BreadthFirst"
+2026-06-22T10:45:15.5937339Z           [32m+[0m[0m ramp_up_start_time                   = "07:30"
+2026-06-22T10:45:15.5937732Z         }
+2026-06-22T10:45:15.5938000Z     }
+2026-06-22T10:45:15.5938147Z 
+2026-06-22T10:45:15.5938400Z [1m  # azurerm_virtual_desktop_workspace.ws[0m will be created
+2026-06-22T10:45:15.5938935Z [0m  [32m+[0m[0m resource "azurerm_virtual_desktop_workspace" "ws" {
+2026-06-22T10:45:15.5939466Z       [32m+[0m[0m id                            = (known after apply)
+2026-06-22T10:45:15.5939964Z       [32m+[0m[0m location                      = "francecentral"
+2026-06-22T10:45:15.5940453Z       [32m+[0m[0m name                          = "MADMSYS1"
+2026-06-22T10:45:15.5940918Z       [32m+[0m[0m public_network_access_enabled = true
+2026-06-22T10:45:15.5941450Z       [32m+[0m[0m resource_group_name           = "EM50-NPR-AVD00-POC-RG01"
+2026-06-22T10:45:15.5941944Z       [32m+[0m[0m tags                          = {
+2026-06-22T10:45:15.5942389Z           [32m+[0m[0m "application-id"      = "AVD00"
+2026-06-22T10:45:15.5942851Z           [32m+[0m[0m "backup-policy"       = "NONPROD"
+2026-06-22T10:45:15.5943414Z           [32m+[0m[0m "managed-by"          = "terraform"
+2026-06-22T10:45:15.5943906Z           [32m+[0m[0m "module"              = "avd-hostpool"
+2026-06-22T10:45:15.5944379Z           [32m+[0m[0m "servier-environment" = "POC"
+2026-06-22T10:45:15.5944947Z         }
+2026-06-22T10:45:15.5945217Z     }
+2026-06-22T10:45:15.5945368Z 
+2026-06-22T10:45:15.5945758Z [1m  # azurerm_virtual_desktop_workspace_application_group_association.ws_dag[0m will be created
+2026-06-22T10:45:15.5946545Z [0m  [32m+[0m[0m resource "azurerm_virtual_desktop_workspace_application_group_association" "ws_dag" {
+2026-06-22T10:45:15.5947180Z       [32m+[0m[0m application_group_id = (known after apply)
+2026-06-22T10:45:15.5947661Z       [32m+[0m[0m id                   = (known after apply)
+2026-06-22T10:45:15.5948141Z       [32m+[0m[0m workspace_id         = (known after apply)
+2026-06-22T10:45:15.5948520Z     }
+2026-06-22T10:45:15.5948659Z 
+2026-06-22T10:45:15.5948872Z [1m  # random_password.admin[0m will be created
+2026-06-22T10:45:15.5949335Z [0m  [32m+[0m[0m resource "random_password" "admin" {
+2026-06-22T10:45:15.5949796Z       [32m+[0m[0m bcrypt_hash      = (sensitive value)
+2026-06-22T10:45:15.5950254Z       [32m+[0m[0m id               = (known after apply)
+2026-06-22T10:45:15.5950680Z       [32m+[0m[0m length           = 20
+2026-06-22T10:45:15.5951073Z       [32m+[0m[0m lower            = true
+2026-06-22T10:45:15.5951463Z       [32m+[0m[0m min_lower        = 0
+2026-06-22T10:45:15.5951861Z       [32m+[0m[0m min_numeric      = 0
+2026-06-22T10:45:15.5952250Z       [32m+[0m[0m min_special      = 0
+2026-06-22T10:45:15.5952637Z       [32m+[0m[0m min_upper        = 0
+2026-06-22T10:45:15.5953029Z       [32m+[0m[0m number           = true
+2026-06-22T10:45:15.5953422Z       [32m+[0m[0m numeric          = true
+2026-06-22T10:45:15.5953867Z       [32m+[0m[0m override_special = "!#$%&*()-_=+[]{}:?"
+2026-06-22T10:45:15.5954328Z       [32m+[0m[0m result           = (sensitive value)
+2026-06-22T10:45:15.5955007Z       [32m+[0m[0m special          = true
+2026-06-22T10:45:15.5955405Z       [32m+[0m[0m upper            = true
+2026-06-22T10:45:15.5955753Z     }
+2026-06-22T10:45:15.5955904Z 
+2026-06-22T10:45:15.5956226Z [1m  # module.fileshare.azurerm_storage_share.share["fslogix"][0m will be created
+2026-06-22T10:45:15.5956821Z [0m  [32m+[0m[0m resource "azurerm_storage_share" "share" {
+2026-06-22T10:45:15.5957326Z       [32m+[0m[0m access_tier         = (known after apply)
+2026-06-22T10:45:15.5957790Z       [32m+[0m[0m enabled_protocol    = "SMB"
+2026-06-22T10:45:15.5958242Z       [32m+[0m[0m id                  = (known after apply)
+2026-06-22T10:45:15.5958897Z       [32m+[0m[0m metadata            = (known after apply)
+2026-06-22T10:45:15.5959504Z       [32m+[0m[0m name                = "avd00-fslogix"
+2026-06-22T10:45:15.5959937Z       [32m+[0m[0m quota               = 100
+2026-06-22T10:45:15.5960397Z       [32m+[0m[0m rbac_scope_id       = (known after apply)
+2026-06-22T10:45:15.5960873Z       [32m+[0m[0m resource_manager_id = (known after apply)
+2026-06-22T10:45:15.5961345Z       [32m+[0m[0m storage_account_id  = (known after apply)
+2026-06-22T10:45:15.5961806Z       [32m+[0m[0m url                 = (known after apply)
+2026-06-22T10:45:15.5962170Z     }
+2026-06-22T10:45:15.5962317Z 
+2026-06-22T10:45:15.5962632Z [1m  # module.host_pool.azurerm_virtual_desktop_host_pool.this[0m will be created
+2026-06-22T10:45:15.5963240Z [0m  [32m+[0m[0m resource "azurerm_virtual_desktop_host_pool" "this" {
+2026-06-22T10:45:15.5963774Z       [32m+[0m[0m id                       = (known after apply)
+2026-06-22T10:45:15.5964252Z       [32m+[0m[0m load_balancer_type       = "BreadthFirst"
+2026-06-22T10:45:15.5964917Z       [32m+[0m[0m location                 = "francecentral"
+2026-06-22T10:45:15.5965394Z       [32m+[0m[0m maximum_sessions_allowed = 5
+2026-06-22T10:45:15.5965980Z       [32m+[0m[0m name                     = "MADMSYS1"
+2026-06-22T10:45:15.5966461Z       [32m+[0m[0m preferred_app_group_type = "Desktop"
+2026-06-22T10:45:15.5966946Z       [32m+[0m[0m public_network_access    = "Enabled"
+2026-06-22T10:45:15.5967467Z       [32m+[0m[0m resource_group_name      = "EM50-NPR-AVD00-POC-RG01"
+2026-06-22T10:45:15.5967976Z       [32m+[0m[0m start_vm_on_connect      = true
+2026-06-22T10:45:15.5968408Z       [32m+[0m[0m tags                     = {
+2026-06-22T10:45:15.5968858Z           [32m+[0m[0m "application-id"      = "AVD00"
+2026-06-22T10:45:15.5969324Z           [32m+[0m[0m "backup-policy"       = "NONPROD"
+2026-06-22T10:45:15.5969788Z           [32m+[0m[0m "managed-by"          = "terraform"
+2026-06-22T10:45:15.5970264Z           [32m+[0m[0m "module"              = "avd-hostpool"
+2026-06-22T10:45:15.5970722Z           [32m+[0m[0m "servier-environment" = "POC"
+2026-06-22T10:45:15.5971088Z         }
+2026-06-22T10:45:15.5971433Z       [32m+[0m[0m type                     = "Pooled"
+2026-06-22T10:45:15.5971895Z       [32m+[0m[0m validate_environment     = false
+2026-06-22T10:45:15.5972255Z     }
+2026-06-22T10:45:15.5972401Z 
+2026-06-22T10:45:15.5972795Z [1m  # module.host_pool.azurerm_virtual_desktop_host_pool_registration_info.this[0m will be created
+2026-06-22T10:45:15.5973535Z [0m  [32m+[0m[0m resource "azurerm_virtual_desktop_host_pool_registration_info" "this" {
+2026-06-22T10:45:15.5974100Z       [32m+[0m[0m expiration_date = (known after apply)
+2026-06-22T10:45:15.5974562Z       [32m+[0m[0m hostpool_id     = (known after apply)
+2026-06-22T10:45:15.5975250Z       [32m+[0m[0m id              = (known after apply)
+2026-06-22T10:45:15.5975712Z       [32m+[0m[0m token           = (sensitive value)
+2026-06-22T10:45:15.5976077Z     }
+2026-06-22T10:45:15.5976221Z 
+2026-06-22T10:45:15.5976546Z [1m  # module.host_pool.time_rotating.registration_expiration[0m will be created
+2026-06-22T10:45:15.5977155Z [0m  [32m+[0m[0m resource "time_rotating" "registration_expiration" {
+2026-06-22T10:45:15.5977784Z       [32m+[0m[0m day              = (known after apply)
+2026-06-22T10:45:15.5978247Z       [32m+[0m[0m hour             = (known after apply)
+2026-06-22T10:45:15.5978715Z       [32m+[0m[0m id               = (known after apply)
+2026-06-22T10:45:15.5979170Z       [32m+[0m[0m minute           = (known after apply)
+2026-06-22T10:45:15.5979616Z       [32m+[0m[0m month            = (known after apply)
+2026-06-22T10:45:15.5980072Z       [32m+[0m[0m rfc3339          = (known after apply)
+2026-06-22T10:45:15.5980492Z       [32m+[0m[0m rotation_hours   = 8
+2026-06-22T10:45:15.5980927Z       [32m+[0m[0m rotation_rfc3339 = (known after apply)
+2026-06-22T10:45:15.5981374Z       [32m+[0m[0m second           = (known after apply)
+2026-06-22T10:45:15.5981820Z       [32m+[0m[0m unix             = (known after apply)
+2026-06-22T10:45:15.5982259Z       [32m+[0m[0m year             = (known after apply)
+2026-06-22T10:45:15.5982622Z     }
+2026-06-22T10:45:15.5983357Z [31m╷[0m[0m
+2026-06-22T10:45:15.5983930Z [31m│[0m [0m[1m[31mError: [0m[0m[1mKey Vault (Subscription: "33e1047f-3638-4d90-a433-145522e18317"
+2026-06-22T10:45:15.5984554Z [31m│[0m [0mResource Group Name: "EM50-NPR-AVD00-NPR-RG01"
+2026-06-22T10:45:15.5985224Z [31m│[0m [0mKey Vault Name: "EM50-NPR-AVD00-KV01") was not found[0m
+2026-06-22T10:45:15.5985672Z [31m│[0m [0m
+2026-06-22T10:45:15.5986045Z [31m│[0m [0m[0m  with data.azurerm_key_vault.avd,
+2026-06-22T10:45:15.5986554Z [31m│[0m [0m  on main.tf line 93, in data "azurerm_key_vault" "avd":
+2026-06-22T10:45:15.5987091Z [31m│[0m [0m  93: data "azurerm_key_vault" "avd" [4m{[0m[0m
+2026-06-22T10:45:15.5987513Z [31m│[0m [0m
+2026-06-22T10:45:15.5987826Z [31m╵[0m[0m
+2026-06-22T10:45:15.5987994Z 
+2026-06-22T10:45:15.5988339Z [1m  # module.storage_account.azurerm_storage_account.storage_account[0m will be created
+2026-06-22T10:45:15.5988997Z [0m  [32m+[0m[0m resource "azurerm_storage_account" "storage_account" {
+2026-06-22T10:45:15.5989673Z       [32m+[0m[0m access_tier                        = "Hot"
+2026-06-22T10:45:15.5990196Z       [32m+[0m[0m account_kind                       = "FileStorage"
+2026-06-22T10:45:15.5990717Z       [32m+[0m[0m account_replication_type           = "LRS"
+2026-06-22T10:45:15.5991238Z       [32m+[0m[0m account_tier                       = "Premium"
+2026-06-22T10:45:15.5991760Z       [32m+[0m[0m allow_nested_items_to_be_public    = false
+2026-06-22T10:45:15.5992256Z       [32m+[0m[0m cross_tenant_replication_enabled   = false
+2026-06-22T10:45:15.5992748Z       [32m+[0m[0m default_to_oauth_authentication    = true
+2026-06-22T10:45:15.5993257Z       [32m+[0m[0m dns_endpoint_type                  = "Standard"
+2026-06-22T10:45:15.5993759Z       [32m+[0m[0m https_traffic_only_enabled         = true
+2026-06-22T10:45:15.5994268Z       [32m+[0m[0m id                                 = (known after apply)
+2026-06-22T10:45:15.5994855Z       [32m+[0m[0m infrastructure_encryption_enabled  = false
+2026-06-22T10:45:15.5995348Z       [32m+[0m[0m is_hns_enabled                     = false
+2026-06-22T10:45:15.5995812Z       [32m+[0m[0m large_file_share_enabled           = true
+2026-06-22T10:45:15.5996287Z       [32m+[0m[0m local_user_enabled                 = false
+2026-06-22T10:45:15.5996782Z       [32m+[0m[0m location                           = "francecentral"
+2026-06-22T10:45:15.5997294Z       [32m+[0m[0m min_tls_version                    = "TLS1_2"
+2026-06-22T10:45:15.5997807Z       [32m+[0m[0m name                               = "em50pocmadmsys1fsl"
+2026-06-22T10:45:15.5998309Z       [32m+[0m[0m nfsv3_enabled                      = false
+2026-06-22T10:45:15.5998827Z       [32m+[0m[0m primary_access_key                 = (sensitive value)
+2026-06-22T10:45:15.5999369Z       [32m+[0m[0m primary_blob_connection_string     = (sensitive value)
+2026-06-22T10:45:15.5999934Z       [32m+[0m[0m primary_blob_endpoint              = (known after apply)
+2026-06-22T10:45:15.6000577Z       [32m+[0m[0m primary_blob_host                  = (known after apply)
+2026-06-22T10:45:15.6001143Z       [32m+[0m[0m primary_blob_internet_endpoint     = (known after apply)
+2026-06-22T10:45:15.6001703Z       [32m+[0m[0m primary_blob_internet_host         = (known after apply)
+2026-06-22T10:45:15.6002274Z       [32m+[0m[0m primary_blob_microsoft_endpoint    = (known after apply)
+2026-06-22T10:45:15.6002864Z       [32m+[0m[0m primary_blob_microsoft_host        = (known after apply)
+2026-06-22T10:45:15.6003421Z       [32m+[0m[0m primary_connection_string          = (sensitive value)
+2026-06-22T10:45:15.6003983Z       [32m+[0m[0m primary_dfs_endpoint               = (known after apply)
+2026-06-22T10:45:15.6004527Z       [32m+[0m[0m primary_dfs_host                   = (known after apply)
+2026-06-22T10:45:15.6005172Z       [32m+[0m[0m primary_dfs_internet_endpoint      = (known after apply)
+2026-06-22T10:45:15.6005743Z       [32m+[0m[0m primary_dfs_internet_host          = (known after apply)
+2026-06-22T10:45:15.6006314Z       [32m+[0m[0m primary_dfs_microsoft_endpoint     = (known after apply)
+2026-06-22T10:45:15.6006877Z       [32m+[0m[0m primary_dfs_microsoft_host         = (known after apply)
+2026-06-22T10:45:15.6007440Z       [32m+[0m[0m primary_file_endpoint              = (known after apply)
+2026-06-22T10:45:15.6007984Z       [32m+[0m[0m primary_file_host                  = (known after apply)
+2026-06-22T10:45:15.6008522Z       [32m+[0m[0m primary_file_internet_endpoint     = (known after apply)
+2026-06-22T10:45:15.6009076Z       [32m+[0m[0m primary_file_internet_host         = (known after apply)
+2026-06-22T10:45:15.6009621Z       [32m+[0m[0m primary_file_microsoft_endpoint    = (known after apply)
+2026-06-22T10:45:15.6010176Z       [32m+[0m[0m primary_file_microsoft_host        = (known after apply)
+2026-06-22T10:45:15.6010715Z       [32m+[0m[0m primary_location                   = (known after apply)
+2026-06-22T10:45:15.6011349Z       [32m+[0m[0m primary_queue_endpoint             = (known after apply)
+2026-06-22T10:45:15.6011894Z       [32m+[0m[0m primary_queue_host                 = (known after apply)
+2026-06-22T10:45:15.6012458Z       [32m+[0m[0m primary_queue_microsoft_endpoint   = (known after apply)
+2026-06-22T10:45:15.6013029Z       [32m+[0m[0m primary_queue_microsoft_host       = (known after apply)
+2026-06-22T10:45:15.6013585Z       [32m+[0m[0m primary_table_endpoint             = (known after apply)
+2026-06-22T10:45:15.6014141Z       [32m+[0m[0m primary_table_host                 = (known after apply)
+2026-06-22T10:45:15.6014765Z       [32m+[0m[0m primary_table_microsoft_endpoint   = (known after apply)
+2026-06-22T10:45:15.6015337Z       [32m+[0m[0m primary_table_microsoft_host       = (known after apply)
+2026-06-22T10:45:15.6015890Z       [32m+[0m[0m primary_web_endpoint               = (known after apply)
+2026-06-22T10:45:15.6016451Z       [32m+[0m[0m primary_web_host                   = (known after apply)
+2026-06-22T10:45:15.6017031Z       [32m+[0m[0m primary_web_internet_endpoint      = (known after apply)
+2026-06-22T10:45:15.6017595Z       [32m+[0m[0m primary_web_internet_host          = (known after apply)
+2026-06-22T10:45:15.6018161Z       [32m+[0m[0m primary_web_microsoft_endpoint     = (known after apply)
+2026-06-22T10:45:15.6018712Z       [32m+[0m[0m primary_web_microsoft_host         = (known after apply)
+2026-06-22T10:45:15.6019230Z       [32m+[0m[0m public_network_access_enabled      = true
+2026-06-22T10:45:15.6019732Z       [32m+[0m[0m queue_encryption_key_type          = "Service"
+2026-06-22T10:45:15.6020303Z       [32m+[0m[0m resource_group_name                = "EM50-NPR-AVD00-POC-RG01"
+2026-06-22T10:45:15.6020876Z       [32m+[0m[0m secondary_access_key               = (sensitive value)
+2026-06-22T10:45:15.6021430Z       [32m+[0m[0m secondary_blob_connection_string   = (sensitive value)
+2026-06-22T10:45:15.6021984Z       [32m+[0m[0m secondary_blob_endpoint            = (known after apply)
+2026-06-22T10:45:15.6022636Z       [32m+[0m[0m secondary_blob_host                = (known after apply)
+2026-06-22T10:45:15.6023202Z       [32m+[0m[0m secondary_blob_internet_endpoint   = (known after apply)
+2026-06-22T10:45:15.6023767Z       [32m+[0m[0m secondary_blob_internet_host       = (known after apply)
+2026-06-22T10:45:15.6024336Z       [32m+[0m[0m secondary_blob_microsoft_endpoint  = (known after apply)
+2026-06-22T10:45:15.6024976Z       [32m+[0m[0m secondary_blob_microsoft_host      = (known after apply)
+2026-06-22T10:45:15.6025539Z       [32m+[0m[0m secondary_connection_string        = (sensitive value)
+2026-06-22T10:45:15.6026090Z       [32m+[0m[0m secondary_dfs_endpoint             = (known after apply)
+2026-06-22T10:45:15.6026660Z       [32m+[0m[0m secondary_dfs_host                 = (known after apply)
+2026-06-22T10:45:15.6027227Z       [32m+[0m[0m secondary_dfs_internet_endpoint    = (known after apply)
+2026-06-22T10:45:15.6027798Z       [32m+[0m[0m secondary_dfs_internet_host        = (known after apply)
+2026-06-22T10:45:15.6028359Z       [32m+[0m[0m secondary_dfs_microsoft_endpoint   = (known after apply)
+2026-06-22T10:45:15.6028918Z       [32m+[0m[0m secondary_dfs_microsoft_host       = (known after apply)
+2026-06-22T10:45:15.6029483Z       [32m+[0m[0m secondary_file_endpoint            = (known after apply)
+2026-06-22T10:45:15.6030041Z       [32m+[0m[0m secondary_file_host                = (known after apply)
+2026-06-22T10:45:15.6030600Z       [32m+[0m[0m secondary_file_internet_endpoint   = (known after apply)
+2026-06-22T10:45:15.6031165Z       [32m+[0m[0m secondary_file_internet_host       = (known after apply)
+2026-06-22T10:45:15.6031724Z       [32m+[0m[0m secondary_file_microsoft_endpoint  = (known after apply)
+2026-06-22T10:45:15.6032285Z       [32m+[0m[0m secondary_file_microsoft_host      = (known after apply)
+2026-06-22T10:45:15.6032982Z       [32m+[0m[0m secondary_location                 = (known after apply)
+2026-06-22T10:45:15.6033561Z       [32m+[0m[0m secondary_queue_endpoint           = (known after apply)
+2026-06-22T10:45:15.6034113Z       [32m+[0m[0m secondary_queue_host               = (known after apply)
+2026-06-22T10:45:15.6034761Z       [32m+[0m[0m secondary_queue_microsoft_endpoint = (known after apply)
+2026-06-22T10:45:15.6035321Z       [32m+[0m[0m secondary_queue_microsoft_host     = (known after apply)
+2026-06-22T10:45:15.6035883Z       [32m+[0m[0m secondary_table_endpoint           = (known after apply)
+2026-06-22T10:45:15.6036444Z       [32m+[0m[0m secondary_table_host               = (known after apply)
+2026-06-22T10:45:15.6036996Z       [32m+[0m[0m secondary_table_microsoft_endpoint = (known after apply)
+2026-06-22T10:45:15.6037563Z       [32m+[0m[0m secondary_table_microsoft_host     = (known after apply)
+2026-06-22T10:45:15.6038120Z       [32m+[0m[0m secondary_web_endpoint             = (known after apply)
+2026-06-22T10:45:15.6038683Z       [32m+[0m[0m secondary_web_host                 = (known after apply)
+2026-06-22T10:45:15.6039236Z       [32m+[0m[0m secondary_web_internet_endpoint    = (known after apply)
+2026-06-22T10:45:15.6039803Z       [32m+[0m[0m secondary_web_internet_host        = (known after apply)
+2026-06-22T10:45:15.6040367Z       [32m+[0m[0m secondary_web_microsoft_endpoint   = (known after apply)
+2026-06-22T10:45:15.6040919Z       [32m+[0m[0m secondary_web_microsoft_host       = (known after apply)
+2026-06-22T10:45:15.6041450Z       [32m+[0m[0m sftp_enabled                       = false
+2026-06-22T10:45:15.6041936Z       [32m+[0m[0m shared_access_key_enabled          = true
+2026-06-22T10:45:15.6042448Z       [32m+[0m[0m table_encryption_key_type          = "Service"
+2026-06-22T10:45:15.6042940Z       [32m+[0m[0m tags                               = {
+2026-06-22T10:45:15.6043407Z           [32m+[0m[0m "application_id"      = "AVD00"
+2026-06-22T10:45:15.6043873Z           [32m+[0m[0m "managed_by"          = "terraform"
+2026-06-22T10:45:15.6044431Z           [32m+[0m[0m "servier_environment" = "POC"
+2026-06-22T10:45:15.6044869Z         }
+2026-06-22T10:45:15.6045022Z 
+2026-06-22T10:45:15.6045207Z       [32m+[0m[0m network_rules {
+2026-06-22T10:45:15.6045636Z           [32m+[0m[0m bypass                     = [
+2026-06-22T10:45:15.6046064Z               [32m+[0m[0m "AzureServices",
+2026-06-22T10:45:15.6046419Z             ]
+2026-06-22T10:45:15.6046777Z           [32m+[0m[0m default_action             = "Allow"
+2026-06-22T10:45:15.6047272Z           [32m+[0m[0m ip_rules                   = (known after apply)
+2026-06-22T10:45:15.6047793Z           [32m+[0m[0m virtual_network_subnet_ids = (known after apply)
+2026-06-22T10:45:15.6048207Z         }
+2026-06-22T10:45:15.6048471Z     }
+2026-06-22T10:45:15.6048620Z 
+2026-06-22T10:45:15.6048921Z [1m  # module.subnet.azurerm_network_security_group.this[0m will be created
+2026-06-22T10:45:15.6049506Z [0m  [32m+[0m[0m resource "azurerm_network_security_group" "this" {
+2026-06-22T10:45:15.6050023Z       [32m+[0m[0m id                  = (known after apply)
+2026-06-22T10:45:15.6050498Z       [32m+[0m[0m location            = "francecentral"
+2026-06-22T10:45:15.6050971Z       [32m+[0m[0m name                = "MADMSYS1-NSG01"
+2026-06-22T10:45:15.6051487Z       [32m+[0m[0m resource_group_name = "EM50-NPR-AVDAZ-TST-RG01"
+2026-06-22T10:45:15.6051952Z       [32m+[0m[0m security_rule       = [
+2026-06-22T10:45:15.6052347Z           [32m+[0m[0m {
+2026-06-22T10:45:15.6052783Z               [32m+[0m[0m access                                     = "Allow"
+2026-06-22T10:45:15.6053334Z               [32m+[0m[0m description                                = ""
+2026-06-22T10:45:15.6053904Z               [32m+[0m[0m destination_address_prefix                 = "AzureCloud"
+2026-06-22T10:45:15.6054476Z               [32m+[0m[0m destination_address_prefixes               = []
+2026-06-22T10:45:15.6055178Z               [32m+[0m[0m destination_application_security_group_ids = []
+2026-06-22T10:45:15.6055740Z               [32m+[0m[0m destination_port_range                     = "443"
+2026-06-22T10:45:15.6056276Z               [32m+[0m[0m destination_port_ranges                    = []
+2026-06-22T10:45:15.6056823Z               [32m+[0m[0m direction                                  = "Outbound"
+2026-06-22T10:45:15.6057437Z               [32m+[0m[0m name                                       = "AllowAvdCoreServicesOutbound"
+2026-06-22T10:45:15.6058004Z               [32m+[0m[0m priority                                   = 100
+2026-06-22T10:45:15.6058538Z               [32m+[0m[0m protocol                                   = "Tcp"
+2026-06-22T10:45:15.6059055Z               [32m+[0m[0m source_address_prefix                      = "*"
+2026-06-22T10:45:15.6059608Z               [32m+[0m[0m source_address_prefixes                    = []
+2026-06-22T10:45:15.6060142Z               [32m+[0m[0m source_application_security_group_ids      = []
+2026-06-22T10:45:15.6060667Z               [32m+[0m[0m source_port_range                          = "*"
+2026-06-22T10:45:15.6061186Z               [32m+[0m[0m source_port_ranges                         = []
+2026-06-22T10:45:15.6061583Z             },
+2026-06-22T10:45:15.6061903Z           [32m+[0m[0m {
+2026-06-22T10:45:15.6062339Z               [32m+[0m[0m access                                     = "Allow"
+2026-06-22T10:45:15.6062865Z               [32m+[0m[0m description                                = ""
+2026-06-22T10:45:15.6063414Z               [32m+[0m[0m destination_address_prefix                 = "Internet"
+2026-06-22T10:45:15.6063970Z               [32m+[0m[0m destination_address_prefixes               = []
+2026-06-22T10:45:15.6064508Z               [32m+[0m[0m destination_application_security_group_ids = []
+2026-06-22T10:45:15.6065130Z               [32m+[0m[0m destination_port_range                     = "3478"
+2026-06-22T10:45:15.6065772Z               [32m+[0m[0m destination_port_ranges                    = []
+2026-06-22T10:45:15.6066332Z               [32m+[0m[0m direction                                  = "Outbound"
+2026-06-22T10:45:15.6066959Z               [32m+[0m[0m name                                       = "AllowRdpShortpathOutbound"
+2026-06-22T10:45:15.6067538Z               [32m+[0m[0m priority                                   = 110
+2026-06-22T10:45:15.6068072Z               [32m+[0m[0m protocol                                   = "Udp"
+2026-06-22T10:45:15.6068593Z               [32m+[0m[0m source_address_prefix                      = "*"
+2026-06-22T10:45:15.6069112Z               [32m+[0m[0m source_address_prefixes                    = []
+2026-06-22T10:45:15.6069636Z               [32m+[0m[0m source_application_security_group_ids      = []
+2026-06-22T10:45:15.6070150Z               [32m+[0m[0m source_port_range                          = "*"
+2026-06-22T10:45:15.6070666Z               [32m+[0m[0m source_port_ranges                         = []
+2026-06-22T10:45:15.6071055Z             },
+2026-06-22T10:45:15.6071369Z           [32m+[0m[0m {
+2026-06-22T10:45:15.6071795Z               [32m+[0m[0m access                                     = "Allow"
+2026-06-22T10:45:15.6072319Z               [32m+[0m[0m description                                = ""
+2026-06-22T10:45:15.6072856Z               [32m+[0m[0m destination_address_prefix                 = "Internet"
+2026-06-22T10:45:15.6073413Z               [32m+[0m[0m destination_address_prefixes               = []
+2026-06-22T10:45:15.6073949Z               [32m+[0m[0m destination_application_security_group_ids = []
+2026-06-22T10:45:15.6074486Z               [32m+[0m[0m destination_port_range                     = "80"
+2026-06-22T10:45:15.6075107Z               [32m+[0m[0m destination_port_ranges                    = []
+2026-06-22T10:45:15.6075642Z               [32m+[0m[0m direction                                  = "Outbound"
+2026-06-22T10:45:15.6076351Z               [32m+[0m[0m name                                       = "AllowCertificateValidationOutbound"
+2026-06-22T10:45:15.6076944Z               [32m+[0m[0m priority                                   = 120
+2026-06-22T10:45:15.6077486Z               [32m+[0m[0m protocol                                   = "Tcp"
+2026-06-22T10:45:15.6078038Z               [32m+[0m[0m source_address_prefix                      = "*"
+2026-06-22T10:45:15.6078573Z               [32m+[0m[0m source_address_prefixes                    = []
+2026-06-22T10:45:15.6079112Z               [32m+[0m[0m source_application_security_group_ids      = []
+2026-06-22T10:45:15.6079630Z               [32m+[0m[0m source_port_range                          = "*"
+2026-06-22T10:45:15.6080140Z               [32m+[0m[0m source_port_ranges                         = []
+2026-06-22T10:45:15.6080526Z             },
+2026-06-22T10:45:15.6080801Z         ]
+2026-06-22T10:45:15.6081120Z       [32m+[0m[0m tags                = {
+2026-06-22T10:45:15.6081550Z           [32m+[0m[0m "application-id"      = "AVD00"
+2026-06-22T10:45:15.6082005Z           [32m+[0m[0m "backup-policy"       = "NONPROD"
+2026-06-22T10:45:15.6082471Z           [32m+[0m[0m "managed-by"          = "terraform"
+2026-06-22T10:45:15.6082941Z           [32m+[0m[0m "module"              = "avd-hostpool"
+2026-06-22T10:45:15.6083406Z           [32m+[0m[0m "servier-environment" = "POC"
+2026-06-22T10:45:15.6083772Z         }
+2026-06-22T10:45:15.6084032Z     }
+2026-06-22T10:45:15.6084184Z 
+2026-06-22T10:45:15.6084432Z [1m  # module.subnet.azurerm_subnet.this[0m will be created
+2026-06-22T10:45:15.6085020Z [0m  [32m+[0m[0m resource "azurerm_subnet" "this" {
+2026-06-22T10:45:15.6085524Z       [32m+[0m[0m address_prefixes                              = [
+2026-06-22T10:45:15.6085986Z           [32m+[0m[0m "10.202.80.0/24",
+2026-06-22T10:45:15.6086333Z         ]
+2026-06-22T10:45:15.6086739Z       [32m+[0m[0m default_outbound_access_enabled               = true
+2026-06-22T10:45:15.6087387Z       [32m+[0m[0m id                                            = (known after apply)
+2026-06-22T10:45:15.6087951Z       [32m+[0m[0m name                                          = "MADMSYS1-SNET01"
+2026-06-22T10:45:15.6088549Z       [32m+[0m[0m private_endpoint_network_policies             = "Disabled"
+2026-06-22T10:45:15.6089123Z       [32m+[0m[0m private_link_service_network_policies_enabled = true
+2026-06-22T10:45:15.6089734Z       [32m+[0m[0m resource_group_name                           = "EM50-NPR-AVDAZ-TST-RG01"
+2026-06-22T10:45:15.6090383Z       [32m+[0m[0m virtual_network_name                          = "EM50-NPR-AVDAZ-VNET01"
+2026-06-22T10:45:15.6090825Z     }
+2026-06-22T10:45:15.6090969Z 
+2026-06-22T10:45:15.6091345Z [1m  # module.subnet.azurerm_subnet_network_security_group_association.this[0m will be created
+2026-06-22T10:45:15.6092055Z [0m  [32m+[0m[0m resource "azurerm_subnet_network_security_group_association" "this" {
+2026-06-22T10:45:15.6092645Z       [32m+[0m[0m id                        = (known after apply)
+2026-06-22T10:45:15.6093155Z       [32m+[0m[0m network_security_group_id = (known after apply)
+2026-06-22T10:45:15.6093661Z       [32m+[0m[0m subnet_id                 = (known after apply)
+2026-06-22T10:45:15.6094048Z     }
+2026-06-22T10:45:15.6094182Z 
+2026-06-22T10:45:15.6094394Z [1mPlan:[0m 17 to add, 0 to change, 0 to destroy.
+2026-06-22T10:45:15.6094855Z [0m
+2026-06-22T10:45:15.6095125Z Changes to Outputs:
+2026-06-22T10:45:15.6095544Z   [32m+[0m[0m app_group_id                 = (known after apply)
+2026-06-22T10:45:15.6096052Z   [32m+[0m[0m fslogix_fileshare_name       = "avd00-fslogix"
+2026-06-22T10:45:15.6096586Z   [32m+[0m[0m fslogix_storage_account_name = "em50pocmadmsys1fsl"
+2026-06-22T10:45:15.6097110Z   [32m+[0m[0m host_pool_id                 = (known after apply)
+2026-06-22T10:45:15.6097605Z   [32m+[0m[0m host_pool_name               = "MADMSYS1"
+2026-06-22T10:45:15.6098201Z   [32m+[0m[0m network_security_group_id    = (known after apply)
+2026-06-22T10:45:15.6098729Z   [32m+[0m[0m registration_expiration_date = (known after apply)
+2026-06-22T10:45:15.6099258Z   [32m+[0m[0m registration_token           = (sensitive value)
+2026-06-22T10:45:15.6099812Z   [32m+[0m[0m resource_group_name          = "EM50-NPR-AVD00-POC-RG01"
+2026-06-22T10:45:15.6177874Z   [32m+[0m[0m subnet_address_prefix        = "10.202.80.0/24"
+2026-06-22T10:45:15.6178425Z   [32m+[0m[0m subnet_id                    = (known after apply)
+2026-06-22T10:45:15.6178982Z   [32m+[0m[0m users_group_id               = (known after apply)
+2026-06-22T10:45:15.6179493Z   [32m+[0m[0m workspace_id                 = (known after apply)
+2026-06-22T10:45:15.7366565Z ##[error]Terraform exited with code 1.
+2026-06-22T10:45:15.7411203Z ##[error]Process completed with exit code 1.
+2026-06-22T10:45:15.7490929Z ##[warning]Unexpected input(s) 'installation_id', valid inputs are ['app_id', 'github_api_url', 'installation_retrieval_mode', 'installation_retrieval_payload', 'permissions', 'private_key', 'repositories', 'revoke']
+2026-06-22T10:45:15.7498657Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-06-22T10:45:15.7499907Z Post job cleanup.
+2026-06-22T10:45:15.8050445Z Token revocation skipped
+2026-06-22T10:45:15.8053721Z (node:2942) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-06-22T10:45:15.8054476Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-06-22T10:45:15.8145608Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-06-22T10:45:15.8146985Z Post job cleanup.
+2026-06-22T10:45:15.8587349Z Clearing azure cli accounts from the local cache.
+2026-06-22T10:45:15.8595256Z [command]/usr/bin/az account clear
+2026-06-22T10:45:16.3061983Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-06-22T10:45:16.3063251Z Post job cleanup.
+2026-06-22T10:45:16.3856506Z [command]/usr/bin/git version
+2026-06-22T10:45:16.3888714Z git version 2.54.0
+2026-06-22T10:45:16.3923427Z Temporarily overriding HOME='/home/runner/work/_temp/6ffdd581-f04b-4eed-83e0-5b37374bb06f' before making global git config changes
+2026-06-22T10:45:16.3924820Z Adding repository directory to the temporary git global config as a safe directory
+2026-06-22T10:45:16.3928051Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/terraform-az-services/terraform-az-services/terraform-az-services
+2026-06-22T10:45:16.3958756Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-06-22T10:45:16.3986279Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-06-22T10:45:16.4158747Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-06-22T10:45:16.4184193Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-06-22T10:45:16.4351606Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-06-22T10:45:16.4408266Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-06-22T10:45:16.4701486Z ##[warning]Unexpected input(s) 'installation_id', valid inputs are ['app_id', 'github_api_url', 'installation_retrieval_mode', 'installation_retrieval_payload', 'permissions', 'private_key', 'repositories', 'revoke']
+2026-06-22T10:45:16.4709070Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-06-22T10:45:16.4710318Z Post job cleanup.
+2026-06-22T10:45:16.5509237Z (node:3081) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-06-22T10:45:16.5510390Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-06-22T10:45:16.5511502Z (node:3081) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-06-22T10:45:16.7647282Z Token revoked successfully
+2026-06-22T10:45:16.7746151Z Cleaning up orphan processes
+2026-06-22T10:45:16.7999412Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, azure/login@v2, hashicorp/setup-terraform@v3, tibdex/github-app-token@v2. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
