@@ -79,7 +79,7 @@ permissions:
 jobs:
   terraform:
     name: "Terraform ${{ inputs.operation }} - ${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }}"
-    runs-on: [Automation_linux_pool]
+    runs-on: ubuntu-latest
     env:
       TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-keyvault-${{ inputs.keyvault_inc }}"
       TF_VARFILE:   "vars/${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-${{ inputs.keyvault_inc }}.tfvars"

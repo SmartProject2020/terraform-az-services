@@ -90,7 +90,7 @@ permissions:
 jobs:
   terraform:
     name: "Fileshare ${{ inputs.operation }} - ${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }}"
-    runs-on: [Automation_linux_pool]
+    runs-on: ubuntu-latest
 
     env:
       TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-fileshare-${{ inputs.storage_account_inc }}"
