@@ -510,6 +510,37 @@ jobs:
             echo "SA absent — sera créé par Terraform."
           fi
 
+          # ── Import Fileshares existants ─────────────────────────────────────
+          # Etape 7 fusionne les fileshares deja presents sur le SA avec la liste
+          # demandee (pour ne pas les faire disparaitre du for_each), mais sans les
+          # importer ils sont "+ create" pour Terraform -> plante a l'apply avec
+          # "a resource with this ID already exists" des qu'un des shares fusionnes
+          # existe deja reellement dans Azure.
+          if [ -n "$SA_REAL_ID" ]; then
+            APP_PREFIX=$(echo "${{ inputs.application_id }}" | tr '[:upper:]' '[:lower:]')
+            EXISTING_SHARES=$(az storage share-rm list \
+              --storage-account "$SA_NAME" \
+              --resource-group "$RG_NAME" \
+              --subscription "$SUB" \
+              --query "[].name" -o tsv 2>/dev/null \
+              | sed "s/^${APP_PREFIX}-//" \
+              || echo "")
+
+            echo "=== Vérification Fileshares existants ==="
+            for SHARE in $EXISTING_SHARES; do
+              [ -z "$SHARE" ] && continue
+              SHARE_ADDRESS="module.fileshares.azurerm_storage_share.share[\"${SHARE}\"]"
+              SHARE_ARM_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Storage/storageAccounts/${SA_NAME}/fileServices/default/shares/${APP_PREFIX}-${SHARE}"
+
+              if terraform state list 2>/dev/null | grep -qF "${SHARE_ADDRESS}"; then
+                echo "Fileshare '${SHARE}' déjà dans le state."
+              else
+                echo "Import fileshare '${SHARE}' dans le state..."
+                terraform import -var-file="${{ env.TF_VARFILE }}" "${SHARE_ADDRESS}" "${SHARE_ARM_ID}"
+              fi
+            done
+          fi
+
           rm -f ~/.netrc
 
       # ========================================================================

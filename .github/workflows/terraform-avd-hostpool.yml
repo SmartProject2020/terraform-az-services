@@ -470,6 +470,25 @@ jobs:
               else
                 echo "Subnet $SUBNET_NAME deja dans le state. Import ignore."
               fi
+
+              # L'ID Terraform de azurerm_subnet_route_table_association EST l'ID du
+              # subnet (pas un ID propre). Si le subnet existait deja (cas ci-dessus),
+              # une Route Table peut deja lui etre associee cote Azure independamment
+              # du state (ex: apres un clean_state) -> import obligatoire, sinon
+              # l'apply plante avec "already exists" sur la creation.
+              RTA_ADDR="module.subnet.azurerm_subnet_route_table_association.this"
+              if ! echo "$STATE_LIST" | grep -qF "$RTA_ADDR"; then
+                RT_ASSOCIATED=$(az network vnet subnet show --ids "$SNET_ID" --query "routeTable.id" -o tsv 2>/dev/null || echo "")
+                if [ -n "$RT_ASSOCIATED" ]; then
+                  echo "Route Table deja associee au subnet — import..."
+                  terraform import -var-file="${{ env.TF_VARFILE }}" "$RTA_ADDR" "$SNET_ID"
+                  STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+                else
+                  echo "Aucune Route Table associee au subnet — sera creee par Terraform."
+                fi
+              else
+                echo "Route Table Association deja dans le state. Import ignore."
+              fi
             else
               # Nouveau pool : le subnet doit exister avant tout import (sinon le
               # data source PE echoue). On le cree maintenant via -target.
