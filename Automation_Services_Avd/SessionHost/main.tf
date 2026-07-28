@@ -51,9 +51,10 @@ module "session_host" {
   admin_username = var.admin_username
   admin_password = data.azurerm_key_vault_secret.admin.value
 
-  subnet_id    = local.subnet_id
-  zones        = local.zones
-  os_disk_type = var.os_disk_type
+  subnet_id       = local.subnet_id
+  zones           = local.zones
+  os_disk_type    = var.os_disk_type
+  os_disk_size_gb = var.os_disk_size_gb
 
   source_image_reference = {
     publisher = "MicrosoftWindowsDesktop"
@@ -62,10 +63,11 @@ module "session_host" {
     version   = "latest"
   }
 
-  entra_id_join         = var.entra_id_join
-  host_pool_name        = local.host_pool_name
-  registration_token    = local.registration_token
-  avd_agent_package_url = var.avd_agent_package_url
+  entra_id_join             = var.entra_id_join
+  intune_enrollment_enabled = var.intune_enrollment_enabled
+  host_pool_name            = local.host_pool_name
+  registration_token        = local.registration_token
+  avd_agent_package_url     = var.avd_agent_package_url
 
   APPLICATION_ID      = var.APPLICATION_ID
   servier_environment = var.servier_environment

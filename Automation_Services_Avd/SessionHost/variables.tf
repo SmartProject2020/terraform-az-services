@@ -124,6 +124,12 @@ variable "os_disk_type" {
   default     = "Premium_LRS"
 }
 
+variable "os_disk_size_gb" {
+  description = "Taille du disque OS en GiB"
+  type        = number
+  default     = 128
+}
+
 variable "image_offer" {
   description = "Offre de l'image marketplace"
   type        = string
@@ -141,6 +147,12 @@ variable "image_sku" {
 # ------------------------------------------------------------------------------
 variable "entra_id_join" {
   description = "Jonction Microsoft Entra ID (TAD 3.3 'Entra ID uniquement ?')"
+  type        = bool
+  default     = true
+}
+
+variable "intune_enrollment_enabled" {
+  description = "Declenche l'enrollment MDM Intune (mdmId) a la jonction Entra ID — TAD section 7, Intune exclusif pour Windows 11"
   type        = bool
   default     = true
 }
