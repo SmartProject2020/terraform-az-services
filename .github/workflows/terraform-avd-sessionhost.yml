@@ -166,6 +166,13 @@ on:
         type: choice
         options: ["true", "false"]
 
+      intune_enrollment_enabled:
+        description: "Enrollment MDM Intune (mdmId) a la jonction Entra ID — TAD section 7. Desactiver sur itmatched (MDM non configure, casse le join)"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
 
 permissions:
   id-token: write
@@ -324,7 +331,8 @@ jobs:
           image_offer         = $(to_str_or_null "${{ inputs.image_offer }}")
           image_sku           = $(to_str_or_null "${{ inputs.image_sku }}")
           image_version       = $(to_str_or_null "${{ inputs.image_version }}")
-          entra_id_join       = ${{ inputs.entra_id_join }}
+          entra_id_join             = ${{ inputs.entra_id_join }}
+          intune_enrollment_enabled = ${{ inputs.intune_enrollment_enabled }}
           EOF
 
           echo "----- ${{ env.TF_VARFILE }} -----"
