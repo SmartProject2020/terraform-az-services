@@ -68,8 +68,25 @@ locals {
   pe_name  = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-PE01")
   nic_name = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-NIC01")
 
-  # Scaling Plan : suffixe toujours 01 (1 SP par pool, Pooled uniquement)
+  # Scaling Plan : suffixe toujours 01 (1 SP par pool, Pooled et Personal)
   scaling_plan_name = upper("${var.PLAQUE}-${var.SETTING}-${var.POOL_TYPE}${var.POOL_ID}-SP01")
+
+  # ============================================================================
+  # ScalingPlan Personal (azapi — cf. main.tf) : pas de valeurs precisees au HLD
+  # (sections 12.2.1/12.2.2 vides), retenu avec Ramzi le 2026-07-10 :
+  # Deallocate sur disconnect ET logoff, sur toutes les periodes, 30 min de delai.
+  # Horaires alignes sur le schedule Pooled ("Semaine", Lundi-Vendredi).
+  # ============================================================================
+  scaling_plan_personal_schedule_name       = "Semaine"
+  scaling_plan_personal_days_of_week        = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+  scaling_plan_personal_start_vm_on_connect = var.start_vm_on_connect ? "Enable" : "Disable"
+
+  scaling_plan_personal_period_defaults = {
+    actionOnDisconnect        = "Deallocate"
+    actionOnLogoff            = "Deallocate"
+    minutesToWaitOnDisconnect = 30
+    minutesToWaitOnLogoff     = 30
+  }
 
   # Fuseau horaire du ScalingPlan derive de la plaque (valeurs Windows timezone)
   # AM50 et AP50 : a confirmer avec les equipes regionales

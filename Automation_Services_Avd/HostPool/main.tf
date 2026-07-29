@@ -237,3 +237,81 @@ resource "azurerm_virtual_desktop_scaling_plan" "sp" {
 
   tags = local.common_tags
 }
+
+# ==============================================================================
+# ScalingPlan Personal — azurerm_virtual_desktop_scaling_plan fige hostPoolType
+# a "Pooled" cote provider (cf. hashicorp/terraform-provider-azurerm, resource
+# virtual_desktop_scaling_plan : hostPoolType non expose, toujours envoye a
+# "Pooled"). Le Personal (autostart, actions Deallocate/Hibernate/None sur
+# disconnect/logoff) n'existe qu'en ARM direct : Microsoft.DesktopVirtualization
+# /scalingPlans avec hostPoolType=Personal + sous-ressource /personalSchedules.
+# Gere via azapi (api-version 2026-01-01-preview — derniere version supportant
+# hostPoolType=Personal + personalSchedules dans le schema embarque du provider).
+# ==============================================================================
+
+resource "azapi_resource" "scaling_plan_personal" {
+  count = local.avd_type == "Personal" ? 1 : 0
+
+  type      = "Microsoft.DesktopVirtualization/scalingPlans@2026-01-01-preview"
+  name      = local.scaling_plan_name
+  parent_id = azurerm_resource_group.rg.id
+  location  = var.location
+
+  body = {
+    properties = {
+      timeZone     = local.scaling_plan_time_zone
+      hostPoolType = "Personal"
+      hostPoolReferences = [
+        {
+          hostPoolArmPath    = module.host_pool.host_pool_id
+          scalingPlanEnabled = true
+        }
+      ]
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "azapi_resource" "scaling_plan_personal_schedule" {
+  count = local.avd_type == "Personal" ? 1 : 0
+
+  type      = "Microsoft.DesktopVirtualization/scalingPlans/personalSchedules@2026-01-01-preview"
+  name      = local.scaling_plan_personal_schedule_name
+  parent_id = azapi_resource.scaling_plan_personal[0].id
+
+  body = {
+    properties = merge(
+      {
+        daysOfWeek = local.scaling_plan_personal_days_of_week
+
+        rampUpStartTime        = { hour = 7, minute = 30 }
+        rampUpAutoStartHosts   = "WithAssignedUser"
+        rampUpStartVMOnConnect = local.scaling_plan_personal_start_vm_on_connect
+
+        peakStartTime        = { hour = 8, minute = 0 }
+        peakStartVMOnConnect = local.scaling_plan_personal_start_vm_on_connect
+
+        rampDownStartTime        = { hour = 18, minute = 0 }
+        rampDownStartVMOnConnect = local.scaling_plan_personal_start_vm_on_connect
+
+        offPeakStartTime        = { hour = 20, minute = 0 }
+        offPeakStartVMOnConnect = local.scaling_plan_personal_start_vm_on_connect
+      },
+      { for prefix in ["rampUp", "peak", "rampDown", "offPeak"] :
+        "${prefix}ActionOnDisconnect" => local.scaling_plan_personal_period_defaults.actionOnDisconnect
+      },
+      { for prefix in ["rampUp", "peak", "rampDown", "offPeak"] :
+        "${prefix}ActionOnLogoff" => local.scaling_plan_personal_period_defaults.actionOnLogoff
+      },
+      { for prefix in ["rampUp", "peak", "rampDown", "offPeak"] :
+        "${prefix}MinutesToWaitOnDisconnect" => local.scaling_plan_personal_period_defaults.minutesToWaitOnDisconnect
+      },
+      { for prefix in ["rampUp", "peak", "rampDown", "offPeak"] :
+        "${prefix}MinutesToWaitOnLogoff" => local.scaling_plan_personal_period_defaults.minutesToWaitOnLogoff
+      }
+    )
+  }
+
+  depends_on = [azapi_resource.scaling_plan_personal]
+}

@@ -17,6 +17,10 @@ terraform {
       source  = "hashicorp/random"
       version = ">= 3.4.0"
     }
+    azapi = {
+      source  = "Azure/azapi"
+      version = ">= 2.0.0"
+    }
   }
 
   required_version = ">= 1.3.0"
