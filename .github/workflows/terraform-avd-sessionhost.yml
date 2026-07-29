@@ -129,16 +129,28 @@ on:
         type: choice
         options: [Premium_LRS, StandardSSD_LRS, Standard_LRS]
 
-      image_offer:
-        description: "Offre de l'image marketplace"
+      image_publisher:
+        description: "Publisher de l'image marketplace (laisser vide -> defaut derive de pool_type, cf. locals.tf)"
         required: false
-        default: "windows-11"
+        default: ""
+        type: string
+
+      image_offer:
+        description: "Offre de l'image marketplace (laisser vide -> defaut derive de pool_type, cf. locals.tf)"
+        required: false
+        default: ""
         type: string
 
       image_sku:
-        description: "SKU de l'image marketplace (catalogue AVD — TAD section 8.1.1)"
+        description: "SKU de l'image marketplace (laisser vide -> defaut derive de pool_type, cf. locals.tf)"
         required: false
-        default: "win11-23h2-avd"
+        default: ""
+        type: string
+
+      image_version:
+        description: "Version de l'image marketplace (laisser vide -> defaut derive de pool_type, cf. locals.tf)"
+        required: false
+        default: ""
         type: string
 
       entra_id_join:
@@ -301,8 +313,10 @@ jobs:
           vm_count_override   = $(to_num_or_null "${{ inputs.vm_count_override }}")
           admin_username      = "${{ inputs.admin_username }}"
           os_disk_type        = "${{ inputs.os_disk_type }}"
-          image_offer         = "${{ inputs.image_offer }}"
-          image_sku           = "${{ inputs.image_sku }}"
+          image_publisher     = $(to_str_or_null "${{ inputs.image_publisher }}")
+          image_offer         = $(to_str_or_null "${{ inputs.image_offer }}")
+          image_sku           = $(to_str_or_null "${{ inputs.image_sku }}")
+          image_version       = $(to_str_or_null "${{ inputs.image_version }}")
           entra_id_join       = ${{ inputs.entra_id_join }}
           EOF
 
