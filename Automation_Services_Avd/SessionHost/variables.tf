@@ -130,16 +130,28 @@ variable "os_disk_size_gb" {
   default     = 128
 }
 
-variable "image_offer" {
-  description = "Offre de l'image marketplace"
+variable "image_publisher" {
+  description = "Publisher de l'image marketplace (surcharge le defaut derive de POOL_TYPE, cf. locals.tf)"
   type        = string
-  default     = "windows-11"
+  default     = null
+}
+
+variable "image_offer" {
+  description = "Offre de l'image marketplace (surcharge le defaut derive de POOL_TYPE, cf. locals.tf)"
+  type        = string
+  default     = null
 }
 
 variable "image_sku" {
-  description = "SKU de l'image marketplace"
+  description = "SKU de l'image marketplace (surcharge le defaut derive de POOL_TYPE, cf. locals.tf)"
   type        = string
-  default     = "win11-23h2-avd"
+  default     = null
+}
+
+variable "image_version" {
+  description = "Version de l'image marketplace (surcharge le defaut derive de POOL_TYPE, cf. locals.tf)"
+  type        = string
+  default     = null
 }
 
 # ------------------------------------------------------------------------------

@@ -57,10 +57,10 @@ module "session_host" {
   os_disk_size_gb = var.os_disk_size_gb
 
   source_image_reference = {
-    publisher = "MicrosoftWindowsDesktop"
-    offer     = var.image_offer
-    sku       = var.image_sku
-    version   = "latest"
+    publisher = local.image_publisher
+    offer     = local.image_offer
+    sku       = local.image_sku
+    version   = local.image_version
   }
 
   entra_id_join             = var.entra_id_join

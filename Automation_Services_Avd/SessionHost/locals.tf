@@ -50,6 +50,21 @@ locals {
   session_host_count = local.sizing.session_host_count
 
   # ============================================================================
+  # Image marketplace par defaut selon POOL_TYPE (surchargeable via var.image_*).
+  # Personal -> Windows 11 Enterprise single-session. MultiSession -> Windows 11
+  # Enterprise multi-session + Microsoft 365 Apps (version pinnee, cf. offre office-365).
+  # ============================================================================
+  image_defaults = {
+    "P" = { publisher = "microsoftwindowsdesktop", offer = "windows-11", sku = "win11-25h2-ent", version = "latest" }
+    "M" = { publisher = "microsoftwindowsdesktop", offer = "office-365", sku = "win11-25h2-avd-m365", version = "26200.8655.260609" }
+  }
+
+  image_publisher = coalesce(var.image_publisher, local.image_defaults[var.POOL_TYPE].publisher)
+  image_offer     = coalesce(var.image_offer, local.image_defaults[var.POOL_TYPE].offer)
+  image_sku       = coalesce(var.image_sku, local.image_defaults[var.POOL_TYPE].sku)
+  image_version   = coalesce(var.image_version, local.image_defaults[var.POOL_TYPE].version)
+
+  # ============================================================================
   # Availability Zones — 3 AZ en PRD (resilience), aucune en DEV. Repartition
   # round-robin des Session Hosts sur les zones disponibles (cf. child module).
   # ============================================================================
