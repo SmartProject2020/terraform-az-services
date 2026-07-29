@@ -108,6 +108,12 @@ on:
         required: false
         type: string
 
+      vm_size_override:
+        description: "Force vm_size (contournement quota ponctuel sur un environnement de test) — laisser vide en usage normal"
+        required: false
+        default: ""
+        type: string
+
       start_index:
         description: "Numero incremental de depart (ajout de hosts sans recreer les existants — cf. 'Resize VDI')"
         required: false
@@ -311,6 +317,7 @@ jobs:
           USER_COUNT          = $(to_num_or_null "${{ inputs.user_count }}")
           USER_TIER           = $(to_str_or_null "${{ inputs.user_tier }}")
           vm_count_override   = $(to_num_or_null "${{ inputs.vm_count_override }}")
+          vm_size_override    = $(to_str_or_null "${{ inputs.vm_size_override }}")
           admin_username      = "${{ inputs.admin_username }}"
           os_disk_type        = "${{ inputs.os_disk_type }}"
           image_publisher     = $(to_str_or_null "${{ inputs.image_publisher }}")

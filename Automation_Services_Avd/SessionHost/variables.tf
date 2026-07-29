@@ -110,6 +110,12 @@ variable "vm_count_override" {
   default     = null
 }
 
+variable "vm_size_override" {
+  description = "Force vm_size (contournement quota ponctuel sur un environnement de test) — remplace le sizing derive de POOL_TYPE/WORKLOAD_TYPE/USER_TIER"
+  type        = string
+  default     = null
+}
+
 # ------------------------------------------------------------------------------
 # Configuration machine virtuelle
 # ------------------------------------------------------------------------------

@@ -46,7 +46,7 @@ locals {
     session_host_count = coalesce(var.vm_count_override, local.user_tier_lookup[var.USER_TIER].vm_count)
   }
 
-  vm_size            = local.sizing.vm_size
+  vm_size            = coalesce(var.vm_size_override, local.sizing.vm_size)
   session_host_count = local.sizing.session_host_count
 
   # ============================================================================
