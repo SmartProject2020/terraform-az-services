@@ -935,4 +935,7 @@ jobs:
             -target=module.subnet \
             -target=module.storage_account \
             -target=azurerm_storage_share_directory.profils \
-            -target=module.fileshare
+            -target=module.fileshare \
+            -target=azapi_resource.scaling_plan_personal_schedule \
+            -target=azapi_resource.scaling_plan_personal \
+            -target=azurerm_resource_group.rg
