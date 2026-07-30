@@ -405,7 +405,7 @@ jobs:
           ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
         run: |
           set -euo pipefail
-          COUNT=$(echo 'local.session_host_count' | terraform console -var-file="${{ env.TF_VARFILE }}")
+          COUNT=$(echo 'local.session_host_count' | terraform console -var-file="${{ env.TF_VARFILE }}" | grep -E '^[0-9]+$' | tail -n1)
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "Session Host count (calcule) : $COUNT"
 
