@@ -522,7 +522,7 @@ jobs:
                 # on supprime l'extension et son entree de state pour forcer une
                 # recreation propre au lieu d'un "Modifying..." risque.
                 DSC_MODULES_URL=$(az vm extension show -g "$RG_NAME" --vm-name "$VM_NAME" -n "Microsoft.PowerShell.DSC" --subscription "$SUB" --query "settings.modulesUrl" -o tsv 2>/dev/null || echo "")
-                if [ "$DSC_MODULES_URL" != "${{ vars.AVD_AGENT_PACKAGE_URL }}" ]; then
+                if [ "$DSC_MODULES_URL" != "$TF_VAR_avd_agent_package_url" ]; then
                   echo "::warning::modulesUrl obsolete/vide sur $VM_NAME ('$DSC_MODULES_URL') — suppression de l'extension DSC pour forcer une recreation propre au lieu d'un update in-place."
                   az vm extension delete -g "$RG_NAME" --vm-name "$VM_NAME" -n "Microsoft.PowerShell.DSC" --subscription "$SUB" || true
                   if terraform state list | grep -qF "$DSC_ADDR"; then
