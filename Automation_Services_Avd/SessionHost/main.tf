@@ -69,6 +69,24 @@ module "session_host" {
   registration_token        = local.registration_token
   avd_agent_package_url     = var.avd_agent_package_url
 
+  fslogix_enabled                                    = var.fslogix_enabled
+  fslogix_vhd_locations                              = local.fslogix_vhd_locations
+  fslogix_size_in_mb                                 = var.fslogix_size_in_mb
+  fslogix_volume_type                                = var.fslogix_volume_type
+  fslogix_is_dynamic                                 = var.fslogix_is_dynamic
+  fslogix_flip_flop_profile_directory_name           = var.fslogix_flip_flop_profile_directory_name
+  fslogix_delete_local_profile_when_vhd_should_apply = var.fslogix_delete_local_profile_when_vhd_should_apply
+  fslogix_access_network_as_computer_object          = var.fslogix_access_network_as_computer_object
+  fslogix_keep_local_dir                             = var.fslogix_keep_local_dir
+  fslogix_prevent_login_with_failure                 = var.fslogix_prevent_login_with_failure
+  fslogix_roam_identity                              = var.fslogix_roam_identity
+  fslogix_roam_search                                = var.fslogix_roam_search
+  fslogix_no_profile_containing_folder               = var.fslogix_no_profile_containing_folder
+  fslogix_vhd_name_match                             = var.fslogix_vhd_name_match
+  fslogix_vhd_name_pattern                           = var.fslogix_vhd_name_pattern
+  fslogix_logging_enabled                            = var.fslogix_logging_enabled
+  fslogix_logging_level                              = var.fslogix_logging_level
+
   APPLICATION_ID      = var.APPLICATION_ID
   servier_environment = var.servier_environment
   backup_policy       = local.backup_policy

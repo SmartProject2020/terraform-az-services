@@ -69,4 +69,12 @@ locals {
   # round-robin des Session Hosts sur les zones disponibles (cf. child module).
   # ============================================================================
   zones = var.ENV == "PRD" ? ["1", "2", "3"] : []
+
+  # ============================================================================
+  # FSLogix — chemin UNC derive du fileshare FSLogix du Host Pool (module
+  # StorageAccount + Fileshare, deploye par Automation_Services_Avd_HostPool).
+  # ============================================================================
+  fslogix_storage_account_name = data.terraform_remote_state.host_pool.outputs.fslogix_storage_account_name
+  fslogix_fileshare_name       = data.terraform_remote_state.host_pool.outputs.fslogix_fileshare_name
+  fslogix_vhd_locations        = "\\\\${local.fslogix_storage_account_name}.file.core.windows.net\\${local.fslogix_fileshare_name}"
 }

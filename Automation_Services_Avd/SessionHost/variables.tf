@@ -179,3 +179,104 @@ variable "avd_agent_package_url" {
   description = "URL du package DSC contenant l'agent AVD (Configuration.zip) — fourni via vars.AVD_AGENT_PACKAGE_URL"
   type        = string
 }
+
+# ------------------------------------------------------------------------------
+# FSLogix — Profile Containers (learn.microsoft.com/fslogix/reference-configuration-settings)
+# VHDLocations est toujours derive du fileshare du Host Pool (locals.tf) —
+# seuls les reglages de dimensionnement/comportement sont surchargeables ici.
+# ------------------------------------------------------------------------------
+variable "fslogix_enabled" {
+  description = "Installe et active FSLogix Profile Containers sur les Session Hosts"
+  type        = bool
+  default     = true
+}
+
+variable "fslogix_size_in_mb" {
+  description = "Taille max du VHD(x) de profil par utilisateur, en Mo"
+  type        = number
+  default     = 30000
+}
+
+variable "fslogix_volume_type" {
+  description = "Format du conteneur de profil (vhd ou vhdx)"
+  type        = string
+  default     = "vhdx"
+}
+
+variable "fslogix_is_dynamic" {
+  description = "VHD(x) dynamique (n'occupe que l'espace reellement utilise)"
+  type        = bool
+  default     = true
+}
+
+variable "fslogix_flip_flop_profile_directory_name" {
+  description = "Nomme le dossier de profil <username>_<sid> au lieu de <sid>_<username>. SANS EFFET quand fslogix_no_profile_containing_folder=true — laisse au defaut (false)."
+  type        = bool
+  default     = false
+}
+
+variable "fslogix_delete_local_profile_when_vhd_should_apply" {
+  description = "Supprime le profil Windows local existant quand FSLogix doit s'appliquer (recommandation Microsoft AVD)"
+  type        = bool
+  default     = true
+}
+
+variable "fslogix_access_network_as_computer_object" {
+  description = "Attache le VHD(x) en tant qu'objet ordinateur au lieu de l'utilisateur"
+  type        = bool
+  default     = false
+}
+
+variable "fslogix_keep_local_dir" {
+  description = "Conserve le dossier local_%username% apres deconnexion"
+  type        = bool
+  default     = true
+}
+
+variable "fslogix_prevent_login_with_failure" {
+  description = "Bloque la connexion si l'attachement au VHD(x) de profil echoue"
+  type        = bool
+  default     = true
+}
+
+variable "fslogix_roam_identity" {
+  description = "Roaming legacy des donnees d'identite — Microsoft deconseille ce reglage sur postes Intune/Entra ID joints, laisse au defaut recommande (false)"
+  type        = bool
+  default     = false
+}
+
+variable "fslogix_roam_search" {
+  description = "Roaming de la base de recherche Windows (0=off, 1=mono-utilisateur, 2=multi-utilisateur)"
+  type        = number
+  default     = 0
+}
+
+variable "fslogix_no_profile_containing_folder" {
+  description = "Le conteneur de profil n'utilise pas de sous-dossier par SID — prioritaire sur fslogix_flip_flop_profile_directory_name"
+  type        = bool
+  default     = true
+}
+
+variable "fslogix_vhd_name_match" {
+  description = "Motif de recherche du fichier VHD(x) de profil existant"
+  type        = string
+  default     = "%username%"
+}
+
+variable "fslogix_vhd_name_pattern" {
+  description = "Motif de creation du fichier VHD(x) de profil — doit correspondre a fslogix_vhd_name_match"
+  type        = string
+  default     = "%username%"
+}
+
+variable "fslogix_logging_enabled" {
+  description = "Niveau d'activation des logs FSLogix (0=off, 1=logs par composant, 2=tous les logs)"
+  type        = number
+  default     = 2
+}
+
+variable "fslogix_logging_level" {
+  description = "Verbosite des logs FSLogix (0=Verbose, 1=Standard, 2=Minimal, 3=Erreurs uniquement)"
+  type        = number
+  default     = 1
+}
