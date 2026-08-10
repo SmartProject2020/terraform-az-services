@@ -114,9 +114,9 @@ variable "validate_environment" {
 }
 
 variable "custom_rdp_properties" {
-  description = "Proprietes RDP personnalisees (ex: optimisations RDP ShortPath - section 3.8 du TAD)"
+  description = "Proprietes RDP personnalisees (ex: optimisations RDP ShortPath - section 3.8 du TAD). Le workflow fournit deja un defaut standard Servier si l'input n'est pas renseigne (cf. terraform-avd-hostpool.yml) ; ce defaut ici sert pour un usage direct hors workflow (smoke test, etc.)."
   type        = string
-  default     = null
+  default     = "enablecredsspsupport:i:1;enablerdsaadauth:i:1;autoreconnection enabled:i:1;bandwidthautodetect:i:1;networkautodetect:i:1;videoplaybackmode:i:1;audiocapturemode:i:1;encode redirected video capture:i:1;audiomode:i:0;camerastoredirect:s:*;devicestoredirect:s:*;drivestoredirect:s:;redirectclipboard:i:1;redirectcomports:i:1;redirectprinters:i:0;redirectsmartcards:i:1;redirectwebauthn:i:1;usbdevicestoredirect:s:;use multimon:i:1;maximizetocurrentdisplays:i:0;singlemoninwindowedmode:i:1;screen mode id:i:1;smart sizing:i:1;dynamic resolution:i:1;"
 }
 
 variable "registration_expiration_hours" {

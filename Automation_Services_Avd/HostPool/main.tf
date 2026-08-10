@@ -95,15 +95,15 @@ resource "azurerm_storage_share_directory" "profils" {
 module "private_endpoint" {
   source = "git::https://github.com/SmartProject2020/terraform-az-modules.git//PrivateEndpoint?ref=poc"
 
-  resource_group_name      = azurerm_resource_group.rg.name
-  location                 = module.subnet.vnet_location
-  resource_group_name_vnet = local.network.resource_group_name
-  network_name             = local.network.virtual_network_name
-  subnet_name              = local.subnet_name
+  resource_group_name           = azurerm_resource_group.rg.name
+  location                      = module.subnet.vnet_location
+  resource_group_name_vnet      = local.network.resource_group_name
+  network_name                  = local.network.virtual_network_name
+  subnet_name                   = local.subnet_name
   endpoint_name                 = local.pe_name
   custom_network_interface_name = local.nic_name
-  connection_resource_id   = module.storage_account.storage_account_id
-  resource_type            = "file"
+  connection_resource_id        = module.storage_account.storage_account_id
+  resource_type                 = "file"
 
   providers = {
     azurerm.hub_subscription = azurerm.hub_subscription
@@ -216,23 +216,23 @@ resource "azurerm_virtual_desktop_scaling_plan" "sp" {
   }
 
   schedule {
-    name                                     = "Semaine"
-    days_of_week                             = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-    ramp_up_start_time                       = "07:30"
-    ramp_up_load_balancing_algorithm         = "BreadthFirst"
-    ramp_up_capacity_threshold_percent       = 60
-    peak_start_time                          = "08:00"
-    peak_load_balancing_algorithm            = "BreadthFirst"
-    ramp_down_start_time                     = "18:00"
-    ramp_down_load_balancing_algorithm       = "BreadthFirst"
-    ramp_down_minimum_hosts_percent          = 0
-    ramp_down_capacity_threshold_percent     = 90
-    ramp_down_force_logoff_users             = false
-    ramp_down_wait_time_minutes              = 30
-    ramp_down_notification_message           = "Votre session va etre fermee dans 30 minutes. Veuillez enregistrer votre travail."
-    ramp_down_stop_hosts_when                = "ZeroActiveSessions"
-    off_peak_start_time                      = "20:00"
-    off_peak_load_balancing_algorithm        = "BreadthFirst"
+    name                                 = "Semaine"
+    days_of_week                         = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    ramp_up_start_time                   = "07:30"
+    ramp_up_load_balancing_algorithm     = "BreadthFirst"
+    ramp_up_capacity_threshold_percent   = 60
+    peak_start_time                      = "08:00"
+    peak_load_balancing_algorithm        = "BreadthFirst"
+    ramp_down_start_time                 = "18:00"
+    ramp_down_load_balancing_algorithm   = "BreadthFirst"
+    ramp_down_minimum_hosts_percent      = 0
+    ramp_down_capacity_threshold_percent = 90
+    ramp_down_force_logoff_users         = false
+    ramp_down_wait_time_minutes          = 30
+    ramp_down_notification_message       = "Votre session va etre fermee dans 30 minutes. Veuillez enregistrer votre travail."
+    ramp_down_stop_hosts_when            = "ZeroActiveSessions"
+    off_peak_start_time                  = "20:00"
+    off_peak_load_balancing_algorithm    = "BreadthFirst"
   }
 
   tags = local.common_tags

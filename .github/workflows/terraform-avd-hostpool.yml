@@ -177,6 +177,12 @@ on:
         type: choice
         options: ["false", "true"]
 
+      state_rm_address:
+        description: "Adresse Terraform a retirer du state avant le plan (reparation ciblee, ex: azurerm_storage_share_directory.profils) — laisser vide en usage normal"
+        required: false
+        default: ""
+        type: string
+
 
 permissions:
   id-token: write
@@ -298,6 +304,17 @@ jobs:
           to_str_or_null() { [ -z "$1" ] && echo "null" || printf '"%s"' "$1"; }
           to_num_or_null() { [ -z "$1" ] && echo "null" || echo "$1"; }
 
+          # Proprietes RDP standard Servier (optimisations client : CredSSP,
+          # RD Auth Entra ID, reconnexion auto, redirections peripheriques,
+          # multimon, mise a l'echelle dynamique). Utilisees par defaut quand
+          # l'input custom_rdp_properties n'est pas fourni, pour eviter que
+          # chaque apply sans cet input n'efface le reglage applique en prod
+          # (cf. drift constate sur MADMSS3 le 2026-08-10 : Terraform voulait
+          # remettre cette valeur a null faute d'input explicite).
+          RDP_DEFAULT='enablecredsspsupport:i:1;enablerdsaadauth:i:1;autoreconnection enabled:i:1;bandwidthautodetect:i:1;networkautodetect:i:1;videoplaybackmode:i:1;audiocapturemode:i:1;encode redirected video capture:i:1;audiomode:i:0;camerastoredirect:s:*;devicestoredirect:s:*;drivestoredirect:s:;redirectclipboard:i:1;redirectcomports:i:1;redirectprinters:i:0;redirectsmartcards:i:1;redirectwebauthn:i:1;usbdevicestoredirect:s:;use multimon:i:1;maximizetocurrentdisplays:i:0;singlemoninwindowedmode:i:1;screen mode id:i:1;smart sizing:i:1;dynamic resolution:i:1;'
+          RDP_INPUT="${{ inputs.custom_rdp_properties }}"
+          RDP_PROPERTIES="${RDP_INPUT:-$RDP_DEFAULT}"
+
           cat > "${{ env.TF_VARFILE }}" << EOF
           location                         = "${{ inputs.location }}"
           servier_environment              = "${SERVIER_ENV}"
@@ -308,7 +325,7 @@ jobs:
           maximum_sessions_allowed         = $(to_num_or_null "${{ inputs.maximum_sessions_allowed }}")
           start_vm_on_connect              = ${{ inputs.start_vm_on_connect }}
           validate_environment             = false
-          custom_rdp_properties            = $(to_str_or_null "${{ inputs.custom_rdp_properties }}")
+          custom_rdp_properties            = $(to_str_or_null "$RDP_PROPERTIES")
           registration_expiration_hours    = ${{ inputs.registration_expiration_hours }}
           EOF
 
@@ -392,6 +409,28 @@ jobs:
           else
             echo "State deja vide — rien a supprimer."
           fi
+
+      # ========================================================================
+      # ETAPE 7c : Reparation ciblee du state (si demande)
+      # Retire UNE ressource precise du state avant le plan, utile quand une
+      # ressource est dans un etat bloquant (ex: dependance reseau cassee sur
+      # une autre ressource comme le Private Endpoint) qui empeche meme le
+      # refresh de cette ressource lors du plan. Contrairement a clean_state
+      # (qui vide tout), ne touche qu'une seule adresse Terraform ciblee.
+      # ========================================================================
+      - name: "7c. Reparation ciblee du state (si demande)"
+        if: inputs.state_rm_address != ''
+        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          set -euo pipefail
+          echo "Retrait cible de '${{ inputs.state_rm_address }}' du state..."
+          terraform state rm "${{ inputs.state_rm_address }}" || \
+            echo "::warning::state rm echoue ou adresse absente du state — ignore"
 
       # ========================================================================
       # ETAPE 8a : Calcul noms ressources (RG + Host Pool)
