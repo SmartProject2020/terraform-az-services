@@ -327,6 +327,7 @@ jobs:
           validate_environment             = false
           custom_rdp_properties            = $(to_str_or_null "$RDP_PROPERTIES")
           registration_expiration_hours    = ${{ inputs.registration_expiration_hours }}
+          sa_public_network_access_enabled = false
           EOF
 
           echo "----- ${{ env.TF_VARFILE }} -----"
@@ -878,6 +879,42 @@ jobs:
             else
               echo "ScalingPlan $SP_NAME absent — sera cree par Terraform."
             fi
+          fi
+
+      # ========================================================================
+      # ETAPE 8c : Bootstrap acces public temporaire (repertoire profils)
+      #
+      # Contournement : le runner self-hosted n'a pas de route reseau vers le
+      # Private Endpoint FSLogix sur certains subnets AVD (constate sur PADMSS4,
+      # 2026-08-12 — connection refused sur le repertoire "profils" alors que le
+      # PE existe et est stable). Si le repertoire n'est pas encore dans le state
+      # (creation requise), on l'active brievement en acces public le temps de
+      # creer Storage Account + Fileshare + repertoire, puis on repasse a
+      # l'acces prive (sa_public_network_access_enabled=false, valeur par
+      # defaut du tfvars) au plan/apply normal qui suit — sans y retoucher.
+      # ========================================================================
+      - name: "8c. Bootstrap acces public temporaire (repertoire profils)"
+        if: inputs.operation == 'apply'
+        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          set -euo pipefail
+          DIR_ADDR="azurerm_storage_share_directory.profils"
+          if terraform state list | grep -qF "$DIR_ADDR"; then
+            echo "Repertoire profils deja dans le state — bootstrap acces public ignore."
+          else
+            echo "Repertoire profils absent du state — creation avec acces public temporaire..."
+            terraform apply \
+              -target=module.storage_account \
+              -target=module.fileshare \
+              -target="$DIR_ADDR" \
+              -var-file="${{ env.TF_VARFILE }}" \
+              -var="sa_public_network_access_enabled=true" \
+              -auto-approve
           fi
 
       # ========================================================================

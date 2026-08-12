@@ -140,6 +140,12 @@ variable "HUB_SUBSCRIPTION_ID" {
   type        = string
 }
 
+variable "sa_public_network_access_enabled" {
+  description = "Acces public temporaire du Storage Account FSLogix — doit rester false en usage normal (acces prive via Private Endpoint uniquement). Le workflow le bascule brievement a true le temps de creer le repertoire 'profils' si le runner ne peut pas encore joindre le Private Endpoint (cf. etape 7c terraform-avd-hostpool.yml), puis repasse a false automatiquement au plan/apply suivant."
+  type        = bool
+  default     = false
+}
+
 # ==============================================================================
 # Key Vault AVD partage (pre-existant, 1 par subscription/env)
 # Convention par defaut : ${PLAQUE}-${SETTING}-AVD00-KV01

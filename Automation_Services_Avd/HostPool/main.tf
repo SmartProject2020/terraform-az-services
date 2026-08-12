@@ -63,6 +63,7 @@ module "storage_account" {
   storage_account_tier             = "Premium"
   storage_account_kind             = "FileStorage"
   storage_account_replication_type = local.storage_redundancy
+  public_network_access_enabled    = var.sa_public_network_access_enabled
   enable_aadkerb                   = true
   aadkerb_default_share_permission = "StorageFileDataSmbShareContributor"
 
@@ -70,7 +71,8 @@ module "storage_account" {
   provisioned_billing_model_version = "V2"
   smb_multichannel_enabled          = true
   share_soft_delete_days            = 7
-
+   
+  backup_policy       = local.backup_policy
   servier_environment = var.servier_environment
   APPLICATION_ID      = var.APPLICATION_ID
 }
@@ -104,6 +106,7 @@ module "private_endpoint" {
   custom_network_interface_name = local.nic_name
   connection_resource_id        = module.storage_account.storage_account_id
   resource_type                 = "file"
+  tags                          = local.common_tags
 
   providers = {
     azurerm.hub_subscription = azurerm.hub_subscription
