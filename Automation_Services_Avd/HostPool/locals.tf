@@ -10,7 +10,7 @@ locals {
   avd_type = var.POOL_TYPE == "M" ? "Pooled" : "Personal"
 
   # Backup policy : derive de l environnement
-  backup_policy = var.ENV == "PRD" ? "PROD" : "NONPROD"
+  backup_policy = var.ENV == "PRD" ? "PROD" : "NOBACKUP"
 
   # ============================================================================
   # Reseau — module Avd/Subnet (HLD section 9, 1 Host Pool = 1 subnet dedie)
