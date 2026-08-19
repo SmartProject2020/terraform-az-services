@@ -128,7 +128,7 @@ permissions:
 jobs:
   terraform:
     name: "Terraform ${{ inputs.operation }} - ${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }} - ${{ inputs.pool_type }}${{ inputs.pool_id }}"
-    runs-on: "Automation_linux_pool"
+    runs-on: ubuntu-latest
 
     env:
       TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-hostpool-${{ inputs.pool_type }}${{ inputs.pool_id }}"
