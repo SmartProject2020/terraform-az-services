@@ -14,6 +14,7 @@ variable "SETTING" {
 variable "APPLICATION_ID" {
   description = "Identifiant applicatif (namespace AVD, ex: AVD00)"
   type        = string
+  default     = "AVD00"
 }
 
 variable "ENV" {
@@ -24,12 +25,6 @@ variable "ENV" {
 variable "servier_environment" {
   description = "Servier Environment (tag)"
   type        = string
-}
-
-variable "location" {
-  description = "Azure Region"
-  type        = string
-  default     = "France Central"
 }
 
 # ------------------------------------------------------------------------------
@@ -76,16 +71,6 @@ variable "start_index" {
 # session_host_count sont DERIVES (locals.tf) de POOL_TYPE + WORKLOAD_TYPE/
 # USER_COUNT (Personal) ou USER_TIER/vm_count_override (MultiSession).
 # ------------------------------------------------------------------------------
-variable "POOL_TYPE" {
-  description = "Type de pool : M (Multisession/Pooled) ou P (Personnel/Personal) — determine la table de sizing utilisee"
-  type        = string
-
-  validation {
-    condition     = contains(["M", "P"], var.POOL_TYPE)
-    error_message = "POOL_TYPE doit etre M (multisession) ou P (personnel)."
-  }
-}
-
 variable "WORKLOAD_TYPE" {
   description = "Type de charge de travail (pools Personal uniquement) : Light, Standard, Standard+Teams, Heavy, Power -> determine vm_size"
   type        = string
@@ -105,7 +90,7 @@ variable "USER_TIER" {
 }
 
 variable "vm_count_override" {
-  description = "Nombre de Session Hosts force (pools MultiSession uniquement, paliers 50-100/100-250/250+ sans valeur fixe arretee) — remplace la valeur par defaut du palier"
+  description = "Nombre TOTAL de Session Hosts force pour le pool — remplace la valeur derivee du palier (MultiSession, paliers 50-100/100-250/250+) ou de USER_COUNT (Personal). ATTENTION : session_host_count est un TOTAL, pas un delta ; pour ajouter/retirer des hosts sur un pool existant sans toucher aux VM en place, garder start_index a sa valeur d'origine et n'ajuster que ce total (cf. incident PADMSS6 du 2026-08-14 : USER_COUNT=2 seul avait ecrase le total et detruit les VM au-dela de l'index 1)."
   type        = number
   default     = null
 }
@@ -119,11 +104,6 @@ variable "vm_size_override" {
 # ------------------------------------------------------------------------------
 # Configuration machine virtuelle
 # ------------------------------------------------------------------------------
-variable "admin_username" {
-  description = "Nom d'utilisateur administrateur local"
-  type        = string
-}
-
 variable "os_disk_type" {
   description = "Type de disque managed (storage_account_type) du disque OS"
   type        = string
@@ -134,24 +114,6 @@ variable "os_disk_size_gb" {
   description = "Taille du disque OS en GiB"
   type        = number
   default     = 128
-}
-
-variable "image_publisher" {
-  description = "Publisher de l'image marketplace (surcharge le defaut derive de POOL_TYPE, cf. locals.tf)"
-  type        = string
-  default     = null
-}
-
-variable "image_offer" {
-  description = "Offre de l'image marketplace (surcharge le defaut derive de POOL_TYPE, cf. locals.tf)"
-  type        = string
-  default     = null
-}
-
-variable "image_sku" {
-  description = "SKU de l'image marketplace (surcharge le defaut derive de POOL_TYPE, cf. locals.tf)"
-  type        = string
-  default     = null
 }
 
 variable "image_version" {

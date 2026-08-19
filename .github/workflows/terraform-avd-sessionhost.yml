@@ -39,7 +39,8 @@ on:
 
       application_id:
         description: "Application ID (namespace AVD, ex: AVD00)"
-        required: true
+        required: false
+        default: "AVD00"
         type: string
 
       setting:
@@ -53,18 +54,6 @@ on:
         required: true
         type: choice
         options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
-
-      servier_environment:
-        description: "Servier Environment"
-        required: true
-        type: choice
-        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
-
-      location:
-        description: "Azure Region"
-        required: true
-        default: "France Central"
-        type: string
 
       # ------------------------------------------------------------------
       # Reference au Host Pool cible (doit deja exister)
@@ -80,12 +69,6 @@ on:
       # workload_type/user_count (Personal) ou user_tier/vm_count_override
       # (MultiSession).
       # ------------------------------------------------------------------
-      pool_type:
-        description: "Type de pool : M (Multisession/Pooled) ou P (Personnel/Personal)"
-        required: true
-        type: choice
-        options: [M, P]
-
       workload_type:
         description: "Type de charge de travail (pools Personal uniquement) -> determine vm_size"
         required: false
@@ -104,7 +87,7 @@ on:
         options: ["", "0-10", "10-30", "30-50", "50-100", "100-250", "250+"]
 
       vm_count_override:
-        description: "Nombre de Session Hosts force (MultiSession, paliers 50-100/100-250/250+ uniquement)"
+        description: "Nombre TOTAL de Session Hosts force pour le pool (Personal via USER_COUNT, ou MultiSession paliers 50-100/100-250/250+). Laisser vide en usage normal — a utiliser pour ajouter/retirer des hosts sur un pool existant (garder start_index inchange)"
         required: false
         type: string
 
@@ -123,36 +106,6 @@ on:
       # ------------------------------------------------------------------
       # Configuration machine virtuelle
       # ------------------------------------------------------------------
-      admin_username:
-        description: "Nom d'utilisateur administrateur local"
-        required: true
-        type: string
-
-      os_disk_type:
-        description: "Type de disque managed du disque OS"
-        required: false
-        default: "Premium_LRS"
-        type: choice
-        options: [Premium_LRS, StandardSSD_LRS, Standard_LRS]
-
-      image_publisher:
-        description: "Publisher de l'image marketplace (laisser vide -> defaut derive de pool_type, cf. locals.tf)"
-        required: false
-        default: ""
-        type: string
-
-      image_offer:
-        description: "Offre de l'image marketplace (laisser vide -> defaut derive de pool_type, cf. locals.tf)"
-        required: false
-        default: ""
-        type: string
-
-      image_sku:
-        description: "SKU de l'image marketplace (laisser vide -> defaut derive de pool_type, cf. locals.tf)"
-        required: false
-        default: ""
-        type: string
-
       image_version:
         description: "Version de l'image marketplace (laisser vide -> defaut derive de pool_type, cf. locals.tf)"
         required: false
@@ -193,8 +146,7 @@ jobs:
       TF_VAR_ENV:             "${{ inputs.env }}"
       TF_VAR_APPLICATION_ID:  "${{ inputs.application_id }}"
       TF_VAR_HOST_POOL_NAME:  "${{ inputs.host_pool_name }}"
-      TF_VAR_POOL_TYPE:       "${{ inputs.pool_type }}"
-      TF_VAR_avd_agent_package_url: "${{ vars.AVD_AGENT_PACKAGE_URL }}"
+      TF_VAR_avd_agent_package_url: "${{ vars.AVD_AGENT_PACKAGE_URL || 'https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_1.0.03448.1358.zip' }}"
 
     steps:
       - name: "0. Inputs recus (ServiceNow -> GitHub Actions)"
@@ -232,7 +184,7 @@ jobs:
       - name: "2. Checkout terraform-az-services"
         uses: actions/checkout@v4
         with:
-          repository: SmartProject2020/terraform-az-services
+          repository: ${{ github.repository }}
           ref: poc
           token: ${{ steps.app-token.outputs.token }}
           path: terraform-az-services
@@ -308,7 +260,9 @@ jobs:
           set -euo pipefail
           mkdir -p vars
 
-          SERVIER_ENV="${{ inputs.servier_environment }}"
+          # servier_environment (tag) derive de env, force a PRD si setting=PRD
+          # (AVD ne distingue pas TST/UAT/PPR — cf. memoire architecture).
+          SERVIER_ENV="${{ inputs.env }}"
           if [ "${{ inputs.setting }}" = "PRD" ]; then
             SERVIER_ENV="PRD"
           fi
@@ -316,8 +270,13 @@ jobs:
           to_str_or_null() { [ -z "$1" ] && echo "null" || printf '"%s"' "$1"; }
           to_num_or_null() { [ -z "$1" ] && echo "null" || echo "$1"; }
 
+          # location, POOL_TYPE, admin_username, image_publisher/offer/sku ne
+          # sont plus ecrits ici : location n'est plus consommee par le module
+          # (region reprise du VNET reel), POOL_TYPE est derive de
+          # HOST_POOL_NAME, admin_username est fixe (policy securite Servier),
+          # et publisher/offer/sku suivent toujours le defaut par POOL_TYPE
+          # (seul image_version garde un override reel, cf. locals.tf).
           cat > "${{ env.TF_VARFILE }}" << EOF
-          location            = "${{ inputs.location }}"
           servier_environment = "${SERVIER_ENV}"
           start_index         = ${{ inputs.start_index }}
           WORKLOAD_TYPE       = $(to_str_or_null "${{ inputs.workload_type }}")
@@ -325,11 +284,6 @@ jobs:
           USER_TIER           = $(to_str_or_null "${{ inputs.user_tier }}")
           vm_count_override   = $(to_num_or_null "${{ inputs.vm_count_override }}")
           vm_size_override    = $(to_str_or_null "${{ inputs.vm_size_override }}")
-          admin_username      = "${{ inputs.admin_username }}"
-          os_disk_type        = "${{ inputs.os_disk_type }}"
-          image_publisher     = $(to_str_or_null "${{ inputs.image_publisher }}")
-          image_offer         = $(to_str_or_null "${{ inputs.image_offer }}")
-          image_sku           = $(to_str_or_null "${{ inputs.image_sku }}")
           image_version       = $(to_str_or_null "${{ inputs.image_version }}")
           entra_id_join             = ${{ inputs.entra_id_join }}
           intune_enrollment_enabled = ${{ inputs.intune_enrollment_enabled }}
@@ -379,7 +333,7 @@ jobs:
           ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
           ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
-          GITHUB_TOKEN:        ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN:        ${{ steps.get_token_tf.outputs.token }}
         run: |
           set -euo pipefail
           echo "machine github.com login x-access-token password ${GITHUB_TOKEN}" > ~/.netrc
@@ -389,7 +343,6 @@ jobs:
           terraform workspace new "${{ env.TF_WORKSPACE }}" 2>/dev/null || \
           terraform workspace select "${{ env.TF_WORKSPACE }}"
           rm -f ~/.netrc
-
       # ========================================================================
       # ETAPE 7b : Resolution du sizing (session_host_count derive de
       # pool_type + workload_type/user_count ou user_tier/vm_count_override,
@@ -468,50 +421,53 @@ jobs:
           NAME_PREFIX="${{ steps.names.outputs.prefix }}"
           COUNT=${{ steps.sizing.outputs.count }}
           START=${{ inputs.start_index }}
-
-          # ── Import des Session Hosts existants (VM + NIC + extensions) ──────
+          STATE_LIST=$(terraform state list)
+ 
           for (( i=0; i<COUNT; i++ )); do
             N=$((START + i))
             VM_NAME="${NAME_PREFIX}-${N}"
             NIC_NAME="${VM_NAME}-NIC"
-
+ 
             VM_ADDR="module.session_host.azurerm_windows_virtual_machine.this[$i]"
             NIC_ADDR="module.session_host.azurerm_network_interface.this[$i]"
             AAD_ADDR="module.session_host.azurerm_virtual_machine_extension.aadlogin[$i]"
             DSC_ADDR="module.session_host.azurerm_virtual_machine_extension.avd_registration[$i]"
-
+ 
             VM_ID=$(az vm show -g "$RG_NAME" -n "$VM_NAME" --subscription "$SUB" --query id -o tsv 2>/dev/null || echo "")
             if [ -n "$VM_ID" ]; then
-              if terraform state list | grep -qF "$VM_ADDR"; then
+              if grep -qF "$VM_ADDR" <<< "$STATE_LIST"; then
                 echo "$VM_NAME : VM deja dans le state. Import ignore."
               else
                 echo "Import VM $VM_NAME..."
                 terraform import -var-file="${{ env.TF_VARFILE }}" "$VM_ADDR" "$VM_ID"
+                STATE_LIST=$(terraform state list)
               fi
             else
               echo "$VM_NAME : VM absente — sera creee par Terraform."
             fi
-
+ 
             NIC_ID=$(az network nic show -g "$RG_NAME" -n "$NIC_NAME" --subscription "$SUB" --query id -o tsv 2>/dev/null || echo "")
             if [ -n "$NIC_ID" ]; then
-              if terraform state list | grep -qF "$NIC_ADDR"; then
+              if grep -qF "$NIC_ADDR" <<< "$STATE_LIST"; then
                 echo "$NIC_NAME : NIC deja dans le state. Import ignore."
               else
                 echo "Import NIC $NIC_NAME..."
                 terraform import -var-file="${{ env.TF_VARFILE }}" "$NIC_ADDR" "$NIC_ID"
+                STATE_LIST=$(terraform state list)
               fi
             else
               echo "$NIC_NAME : NIC absente — sera creee par Terraform."
             fi
-
+ 
             if [ -n "$VM_ID" ]; then
               AAD_ID=$(az vm extension show -g "$RG_NAME" --vm-name "$VM_NAME" -n "AADLoginForWindows" --subscription "$SUB" --query id -o tsv 2>/dev/null || echo "")
-              if [ -n "$AAD_ID" ] && ! terraform state list | grep -qF "$AAD_ADDR"; then
+              if [ -n "$AAD_ID" ] && ! grep -qF "$AAD_ADDR" <<< "$STATE_LIST"; then
                 echo "Import extension AADLoginForWindows ($VM_NAME)..."
                 terraform import -var-file="${{ env.TF_VARFILE }}" "$AAD_ADDR" "$AAD_ID" || \
                   echo "::warning::Import AADLoginForWindows echoue pour $VM_NAME"
+                STATE_LIST=$(terraform state list)
               fi
-
+ 
               DSC_ID=$(az vm extension show -g "$RG_NAME" --vm-name "$VM_NAME" -n "Microsoft.PowerShell.DSC" --subscription "$SUB" --query id -o tsv 2>/dev/null || echo "")
               if [ -n "$DSC_ID" ]; then
                 # Un update in-place du DSC AVD (ex: modulesUrl change apres un run
@@ -525,13 +481,15 @@ jobs:
                 if [ "$DSC_MODULES_URL" != "$TF_VAR_avd_agent_package_url" ]; then
                   echo "::warning::modulesUrl obsolete/vide sur $VM_NAME ('$DSC_MODULES_URL') — suppression de l'extension DSC pour forcer une recreation propre au lieu d'un update in-place."
                   az vm extension delete -g "$RG_NAME" --vm-name "$VM_NAME" -n "Microsoft.PowerShell.DSC" --subscription "$SUB" || true
-                  if terraform state list | grep -qF "$DSC_ADDR"; then
+                  if grep -qF "$DSC_ADDR" <<< "$STATE_LIST"; then
                     terraform state rm "$DSC_ADDR" || true
+                    STATE_LIST=$(terraform state list)
                   fi
-                elif ! terraform state list | grep -qF "$DSC_ADDR"; then
+                elif ! grep -qF "$DSC_ADDR" <<< "$STATE_LIST"; then
                   echo "Import extension Microsoft.PowerShell.DSC ($VM_NAME)..."
                   terraform import -var-file="${{ env.TF_VARFILE }}" "$DSC_ADDR" "$DSC_ID" || \
                     echo "::warning::Import Microsoft.PowerShell.DSC echoue pour $VM_NAME"
+                  STATE_LIST=$(terraform state list)
                 fi
               fi
             fi

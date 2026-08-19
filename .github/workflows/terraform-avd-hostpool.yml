@@ -40,7 +40,8 @@ on:
 
       application_id:
         description: "Application ID (namespace AVD, ex: AVD00)"
-        required: true
+        required: false
+        default: "AVD00"
         type: string
 
       setting:
@@ -51,12 +52,6 @@ on:
 
       env:
         description: "Environnement applicatif"
-        required: true
-        type: choice
-        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
-
-      servier_environment:
-        description: "Servier Environment"
         required: true
         type: choice
         options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
@@ -111,29 +106,10 @@ on:
         default: ""
         type: string
 
-      start_vm_on_connect:
-        description: "Demarrage auto des session hosts a la connexion"
-        required: false
-        default: "true"
-        type: choice
-        options: ["true", "false"]
-
-      custom_rdp_properties:
-        description: "Proprietes RDP personnalisees (ex: RDP ShortPath - section 3.8 du TAD)"
-        required: false
-        default: ""
-        type: string
-
-      registration_expiration_hours:
-        description: "Duree de validite (heures) du token d'enregistrement"
-        required: false
-        default: "8"
-        type: string
-
       location:
         description: "Azure Region"
         required: true
-        default: "France Central"
+        default: "North Europe"
         type: string
 
       # ------------------------------------------------------------------
@@ -144,45 +120,6 @@ on:
         description: "Nombre d'utilisateurs du pool (quota FSLogix = nb_users * 5 Go, min 100 Go)"
         required: true
         type: string
-
-      # ------------------------------------------------------------------
-      # Key Vault AVD partage (pre-existant, 1 par subscription/env)
-      # Laisser vide pour utiliser le defaut derive : ${PLAQUE}-${SETTING}-AVD00-KV01
-      # Surcharger uniquement en POC/test avec un KV different.
-      # ------------------------------------------------------------------
-      kv_name:
-        description: "Nom du Key Vault AVD (defaut derive : ${PLAQUE}-${SETTING}-AVD00-KV01)"
-        required: false
-        default: ""
-        type: string
-
-      kv_resource_group_name:
-        description: "Resource Group du Key Vault AVD (defaut derive : ${PLAQUE}-${SETTING}-AVD00-${SETTING}-RG01)"
-        required: false
-        default: ""
-        type: string
-
-      # ------------------------------------------------------------------
-      # Private Endpoint FSLogix — DNS zone hebergee dans GL50-HUBCENTRAL
-      # ------------------------------------------------------------------
-      hub_subscription_id:
-        description: "Subscription ID GL50-HUBCENTRAL (DNS zone privatelink.file.core.windows.net dans GL50-RG006)"
-        required: true
-        type: string
-
-      clean_state:
-        description: "Vider le state Terraform avant les imports (permet de repartir de zero en cas de pollution)"
-        required: false
-        default: "false"
-        type: choice
-        options: ["false", "true"]
-
-      state_rm_address:
-        description: "Adresse Terraform a retirer du state avant le plan (reparation ciblee, ex: azurerm_storage_share_directory.profils) — laisser vide en usage normal"
-        required: false
-        default: ""
-        type: string
-
 
 permissions:
   id-token: write
@@ -206,9 +143,7 @@ jobs:
       TF_VAR_POOL_TYPE:          "${{ inputs.pool_type }}"
       TF_VAR_POOL_ID:            "${{ inputs.pool_id }}"
       TF_VAR_NB_USERS:           "${{ inputs.nb_users }}"
-      TF_VAR_KV_NAME:                "${{ inputs.kv_name }}"
-      TF_VAR_KV_RESOURCE_GROUP_NAME: "${{ inputs.kv_resource_group_name }}"
-      TF_VAR_HUB_SUBSCRIPTION_ID:   "${{ inputs.hub_subscription_id }}"
+      TF_VAR_HUB_SUBSCRIPTION_ID:   "${{ vars.HUB_SUBSCRIPTION_ID }}"
 
     steps:
       - name: "0. Inputs recus (ServiceNow -> GitHub Actions)"
@@ -296,7 +231,9 @@ jobs:
           set -euo pipefail
           mkdir -p vars
 
-          SERVIER_ENV="${{ inputs.servier_environment }}"
+          # servier_environment (tag) derive de env, force a PRD si setting=PRD
+          # (AVD ne distingue pas TST/UAT/PPR — cf. memoire architecture).
+          SERVIER_ENV="${{ inputs.env }}"
           if [ "${{ inputs.setting }}" = "PRD" ]; then
             SERVIER_ENV="PRD"
           fi
@@ -304,30 +241,22 @@ jobs:
           to_str_or_null() { [ -z "$1" ] && echo "null" || printf '"%s"' "$1"; }
           to_num_or_null() { [ -z "$1" ] && echo "null" || echo "$1"; }
 
-          # Proprietes RDP standard Servier (optimisations client : CredSSP,
-          # RD Auth Entra ID, reconnexion auto, redirections peripheriques,
-          # multimon, mise a l'echelle dynamique). Utilisees par defaut quand
-          # l'input custom_rdp_properties n'est pas fourni, pour eviter que
-          # chaque apply sans cet input n'efface le reglage applique en prod
-          # (cf. drift constate sur MADMSS3 le 2026-08-10 : Terraform voulait
-          # remettre cette valeur a null faute d'input explicite).
-          RDP_DEFAULT='enablecredsspsupport:i:1;enablerdsaadauth:i:1;autoreconnection enabled:i:1;bandwidthautodetect:i:1;networkautodetect:i:1;videoplaybackmode:i:1;audiocapturemode:i:1;encode redirected video capture:i:1;audiomode:i:0;camerastoredirect:s:*;devicestoredirect:s:*;drivestoredirect:s:;redirectclipboard:i:1;redirectcomports:i:1;redirectprinters:i:0;redirectsmartcards:i:1;redirectwebauthn:i:1;usbdevicestoredirect:s:;use multimon:i:1;maximizetocurrentdisplays:i:0;singlemoninwindowedmode:i:1;screen mode id:i:1;smart sizing:i:1;dynamic resolution:i:1;'
-          RDP_INPUT="${{ inputs.custom_rdp_properties }}"
-          RDP_PROPERTIES="${RDP_INPUT:-$RDP_DEFAULT}"
-
+          # Seules les valeurs pilotees par un input ServiceNow sont ecrites ici.
+          # Tout le reste (description, validate_environment, start_vm_on_connect,
+          # custom_rdp_properties, registration_expiration_hours,
+          # sa_public_network_access_enabled...) n'est plus ecrit : le defaut du
+          # module (Automation_Services_Avd/HostPool/variables.tf) s'applique
+          # tout seul, sans duplication ici. Tous les RG existants ont ete
+          # nettoyes (2026-08-19) avant ce retrait, donc pas de risque de
+          # reproduire le drift MADMSS3 du 2026-08-10 sur une ressource deja en
+          # place avec une valeur differente du defaut module.
           cat > "${{ env.TF_VARFILE }}" << EOF
           location                         = "${{ inputs.location }}"
           servier_environment              = "${SERVIER_ENV}"
           friendly_name                    = $(to_str_or_null "${{ inputs.friendly_name }}")
-          description                      = null
           load_balancer_type               = "${{ inputs.load_balancer_type }}"
           personal_desktop_assignment_type = $(to_str_or_null "${{ inputs.personal_desktop_assignment_type }}")
           maximum_sessions_allowed         = $(to_num_or_null "${{ inputs.maximum_sessions_allowed }}")
-          start_vm_on_connect              = ${{ inputs.start_vm_on_connect }}
-          validate_environment             = false
-          custom_rdp_properties            = $(to_str_or_null "$RDP_PROPERTIES")
-          registration_expiration_hours    = ${{ inputs.registration_expiration_hours }}
-          sa_public_network_access_enabled = false
           EOF
 
           echo "----- ${{ env.TF_VARFILE }} -----"
@@ -384,54 +313,6 @@ jobs:
           terraform workspace new "${{ env.TF_WORKSPACE }}" 2>/dev/null || \
           terraform workspace select "${{ env.TF_WORKSPACE }}"
           rm -f ~/.netrc
-
-      # ========================================================================
-      # ETAPE 7b : Nettoyage state (si demande)
-      # ========================================================================
-      - name: "7b. Nettoyage state (si demande)"
-        if: inputs.clean_state == 'true'
-        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
-        env:
-          ARM_USE_OIDC:        "true"
-          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
-          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
-        run: |
-          set -euo pipefail
-          echo "Nettoyage du state demande — suppression de toutes les ressources..."
-          STATE_ITEMS=$(terraform state list 2>/dev/null || echo "")
-          if [ -n "$STATE_ITEMS" ]; then
-            while IFS= read -r resource; do
-              [ -z "$resource" ] && continue
-              echo "  state rm: $resource"
-              terraform state rm "$resource" || true
-            done <<< "$STATE_ITEMS"
-            echo "State vide."
-          else
-            echo "State deja vide — rien a supprimer."
-          fi
-
-      # ========================================================================
-      # ETAPE 7c : Reparation ciblee du state (si demande)
-      # Retire UNE ressource precise du state avant le plan, utile quand une
-      # ressource est dans un etat bloquant (ex: dependance reseau cassee sur
-      # une autre ressource comme le Private Endpoint) qui empeche meme le
-      # refresh de cette ressource lors du plan. Contrairement a clean_state
-      # (qui vide tout), ne touche qu'une seule adresse Terraform ciblee.
-      # ========================================================================
-      - name: "7c. Reparation ciblee du state (si demande)"
-        if: inputs.state_rm_address != ''
-        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
-        env:
-          ARM_USE_OIDC:        "true"
-          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
-          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
-        run: |
-          set -euo pipefail
-          echo "Retrait cible de '${{ inputs.state_rm_address }}' du state..."
-          terraform state rm "${{ inputs.state_rm_address }}" || \
-            echo "::warning::state rm echoue ou adresse absente du state — ignore"
 
       # ========================================================================
       # ETAPE 8a : Calcul noms ressources (RG + Host Pool)
@@ -600,10 +481,11 @@ jobs:
           fi
 
           # ── Mot de passe admin local (Key Vault) ──────────────────────────
-          KV_INPUT="${{ inputs.kv_name }}"
-          KV_RG_INPUT="${{ inputs.kv_resource_group_name }}"
-          KV_NAME="${KV_INPUT:-${PLAQUE}-${SETTING}-AVD00-KV01}"
-          KV_RG="${KV_RG_INPUT:-${PLAQUE}-${SETTING}-AVD00-${SETTING}-RG01}"
+          # KV_NAME/KV_RG suivent le meme defaut que locals.tf (kv_name/
+          # kv_resource_group_name, coalesce sur var.KV_NAME/KV_RESOURCE_GROUP_NAME
+          # desormais toujours vides depuis le retrait des inputs correspondants).
+          KV_NAME="${PLAQUE}-${SETTING}-AVD00-KV01"
+          KV_RG="${PLAQUE}-${SETTING}-AVD00-${SETTING}-RG01"
           SECRET_NAME="avdlocaladmin-${HP_NAME}"
           RAND_ADDR="random_password.admin"
           SECRET_ADDR="azurerm_key_vault_secret.admin"
@@ -879,42 +761,6 @@ jobs:
             else
               echo "ScalingPlan $SP_NAME absent — sera cree par Terraform."
             fi
-          fi
-
-      # ========================================================================
-      # ETAPE 8c : Bootstrap acces public temporaire (repertoire profils)
-      #
-      # Contournement : le runner self-hosted n'a pas de route reseau vers le
-      # Private Endpoint FSLogix sur certains subnets AVD (constate sur PADMSS4,
-      # 2026-08-12 — connection refused sur le repertoire "profils" alors que le
-      # PE existe et est stable). Si le repertoire n'est pas encore dans le state
-      # (creation requise), on l'active brievement en acces public le temps de
-      # creer Storage Account + Fileshare + repertoire, puis on repasse a
-      # l'acces prive (sa_public_network_access_enabled=false, valeur par
-      # defaut du tfvars) au plan/apply normal qui suit — sans y retoucher.
-      # ========================================================================
-      - name: "8c. Bootstrap acces public temporaire (repertoire profils)"
-        if: inputs.operation == 'apply'
-        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
-        env:
-          ARM_USE_OIDC:        "true"
-          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
-          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
-        run: |
-          set -euo pipefail
-          DIR_ADDR="azurerm_storage_share_directory.profils"
-          if terraform state list | grep -qF "$DIR_ADDR"; then
-            echo "Repertoire profils deja dans le state — bootstrap acces public ignore."
-          else
-            echo "Repertoire profils absent du state — creation avec acces public temporaire..."
-            terraform apply \
-              -target=module.storage_account \
-              -target=module.fileshare \
-              -target="$DIR_ADDR" \
-              -var-file="${{ env.TF_VARFILE }}" \
-              -var="sa_public_network_access_enabled=true" \
-              -auto-approve
           fi
 
       # ========================================================================

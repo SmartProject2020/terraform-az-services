@@ -15,6 +15,7 @@ variable "SETTING" {
 variable "APPLICATION_ID" {
   description = "Identifiant de l'application (ex: AVD00) — namespace CMDB de la solution AVD"
   type        = string
+  default     = "AVD00"
 }
 
 variable "ENV" {
@@ -141,9 +142,9 @@ variable "HUB_SUBSCRIPTION_ID" {
 }
 
 variable "sa_public_network_access_enabled" {
-  description = "Acces public temporaire du Storage Account FSLogix — doit rester false en usage normal (acces prive via Private Endpoint uniquement). Le workflow le bascule brievement a true le temps de creer le repertoire 'profils' si le runner ne peut pas encore joindre le Private Endpoint (cf. etape 7c terraform-avd-hostpool.yml), puis repasse a false automatiquement au plan/apply suivant."
+  description = "Acces public du Storage Account FSLogix. Le runner self-hosted n'a pas de route reseau vers le Private Endpoint sur certains subnets AVD (constate sur PADMSS4, 2026-08-12) — acces public laisse actif pour eviter le contournement bootstrap."
   type        = bool
-  default     = false
+  default     = true
 }
 
 # ==============================================================================
@@ -163,5 +164,3 @@ variable "KV_RESOURCE_GROUP_NAME" {
   type        = string
   default     = null
 }
-
-

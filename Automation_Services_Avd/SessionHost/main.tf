@@ -48,7 +48,7 @@ module "session_host" {
   start_index        = var.start_index
 
   vm_size        = local.vm_size
-  admin_username = var.admin_username
+  admin_username = local.admin_username
   admin_password = data.azurerm_key_vault_secret.admin.value
 
   subnet_id       = local.subnet_id

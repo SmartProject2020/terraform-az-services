@@ -105,7 +105,7 @@ locals {
   # ============================================================================
   kv_name                = upper(var.KV_NAME != null && var.KV_NAME != "" ? var.KV_NAME : "${var.PLAQUE}-${var.SETTING}-AVD00-KV01")
   kv_resource_group_name = upper(var.KV_RESOURCE_GROUP_NAME != null && var.KV_RESOURCE_GROUP_NAME != "" ? var.KV_RESOURCE_GROUP_NAME : "${var.PLAQUE}-${var.SETTING}-AVD00-${var.SETTING}-RG01")
-
+  sa_public_network_access_enabled = true
   common_tags = {
     "managed-by"          = "terraform"
     "module"              = "avd-hostpool"

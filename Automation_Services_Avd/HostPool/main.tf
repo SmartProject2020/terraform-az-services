@@ -88,7 +88,7 @@ module "fileshare" {
 
 # Repertoire FSLogix standard — FSLogix redirige les profils vers profils\<SID>\Profile
 resource "azurerm_storage_share_directory" "profils" {
-  name              = "profils"
+  name              = "profiles"
   storage_share_url = module.fileshare.fileshare_urls["fslogix"]
 }
 
