@@ -103,8 +103,11 @@ locals {
   # Convention : ${PLAQUE}-${SETTING}-AVD00-KV01 / ${PLAQUE}-${SETTING}-AVD00-${SETTING}-RG01
   # Surchargeables via KV_NAME / KV_RESOURCE_GROUP_NAME si besoin.
   # ============================================================================
-  kv_name                = upper(var.KV_NAME != null && var.KV_NAME != "" ? var.KV_NAME : "${var.PLAQUE}-${var.SETTING}-AVD00-KV01")
-  kv_resource_group_name = upper(var.KV_RESOURCE_GROUP_NAME != null && var.KV_RESOURCE_GROUP_NAME != "" ? var.KV_RESOURCE_GROUP_NAME : "${var.PLAQUE}-${var.SETTING}-AVD00-${var.SETTING}-RG01")
+  # TEMPORAIRE (test itmatched 2026-08-19) : KV02/POC-RG01 au lieu du defaut
+  # KV01/NPR-RG01 — a reverter apres validation, cf. memoire (KV01 indisponible
+  # sur itmatched, nom pris globalement par le vrai KV du tenant Servier).
+  kv_name                = upper(var.KV_NAME != null && var.KV_NAME != "" ? var.KV_NAME : "${var.PLAQUE}-${var.SETTING}-AVD00-KV02")
+  kv_resource_group_name = upper(var.KV_RESOURCE_GROUP_NAME != null && var.KV_RESOURCE_GROUP_NAME != "" ? var.KV_RESOURCE_GROUP_NAME : "${var.PLAQUE}-${var.SETTING}-AVD00-POC-RG01")
   sa_public_network_access_enabled = true
   common_tags = {
     "managed-by"          = "terraform"
