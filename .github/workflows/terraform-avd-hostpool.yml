@@ -798,9 +798,11 @@ jobs:
           # "[Storage Account] <sa_name>.file.core.windows.net"
           APP_NAME="[Storage Account] ${SA_NAME}.file.core.windows.net"
 
-          APP_ID=$(az ad app list \
+          APP_LOOKUP=$(az ad app list \
             --display-name "$APP_NAME" \
-            --query "[0].id" -o tsv 2>/dev/null || echo "")
+            --query "[0].{id:id, appId:appId}" -o json 2>/dev/null || echo "")
+          APP_ID=$(echo "$APP_LOOKUP" | jq -r '.id // empty')
+          APP_CLIENT_ID=$(echo "$APP_LOOKUP" | jq -r '.appId // empty')
 
           if [ -z "$APP_ID" ]; then
             echo "::warning::App Registration '$APP_NAME' non trouvee — AADKERB pas encore actif ou permissions insuffisantes"
@@ -833,8 +835,10 @@ jobs:
           #
           # Fix : creer/mettre a jour directement l objet oauth2PermissionGrant via
           # Microsoft Graph (accepte les tokens app-only). clientId = objectId du
-          # Service Principal de l app AADKERB (pas l objectId de l App Registration).
-          SP_ID=$(az ad sp show --id "$APP_ID" --query id -o tsv 2>/dev/null || echo "")
+          # Service Principal de l app AADKERB (pas l objectId de l App Registration
+          # — az ad sp show --id n accepte que l appId ou un objectId de SP, pas
+          # l objectId de l App Registration elle-meme).
+          SP_ID=$(az ad sp show --id "$APP_CLIENT_ID" --query id -o tsv 2>/dev/null || echo "")
           if [ -z "$SP_ID" ]; then
             echo "::warning::Service Principal introuvable pour $APP_NAME — admin consent ignore"
           else
