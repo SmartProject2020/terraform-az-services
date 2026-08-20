@@ -822,12 +822,44 @@ jobs:
           # Grant admin consent (equivalent au bouton "Grant admin consent for <tenant>"
           # dans App registrations > API permissions) sur les permissions Microsoft Graph
           # deleguees par defaut (openid/profile/User.Read) de l App Registration AADKERB.
-          # Necessite que le SP OIDC ait un role privilegie (Cloud Application
-          # Administrator ou superieur) en plus de Application.ReadWrite.All.
-          if az ad app permission admin-consent --id "$APP_ID"; then
-            echo "Admin consent accorde sur $APP_NAME"
+          #
+          # NE PAS utiliser `az ad app permission admin-consent` : cette commande echoue
+          # systematiquement avec un SP OIDC (auth service principal / OIDC federe) —
+          # erreur "Unauthorized ... UnsupportedAccessTokenType", elle exige en interne
+          # un token utilisateur interactif (`az login`), incompatible avec CI. Aucun
+          # role Entra ID (teste : Cloud Application Administrator, Privileged Role
+          # Administrator) ne corrige ce point, c'est une limitation de la commande CLI
+          # elle-meme (confirme en session le 2026-08-20).
+          #
+          # Fix : creer/mettre a jour directement l objet oauth2PermissionGrant via
+          # Microsoft Graph (accepte les tokens app-only). clientId = objectId du
+          # Service Principal de l app AADKERB (pas l objectId de l App Registration).
+          SP_ID=$(az ad sp show --id "$APP_ID" --query id -o tsv 2>/dev/null || echo "")
+          if [ -z "$SP_ID" ]; then
+            echo "::warning::Service Principal introuvable pour $APP_NAME — admin consent ignore"
           else
-            echo "::warning::Echec du grant admin consent sur $APP_NAME — role privilegie manquant sur le SP OIDC (cf. ticket SNOW Application.ReadWrite.All + role Cloud Application Administrator)"
+            GRAPH_SP_ID=$(az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query "[0].id" -o tsv)
+            EXISTING_GRANT=$(az rest --method GET \
+              --url "https://graph.microsoft.com/v1.0/oauth2PermissionGrants?\$filter=clientId eq '$SP_ID' and resourceId eq '$GRAPH_SP_ID'" \
+              --query "value[0].id" -o tsv 2>/dev/null || echo "")
+
+            if [ -n "$EXISTING_GRANT" ]; then
+              if az rest --method PATCH \
+                --url "https://graph.microsoft.com/v1.0/oauth2PermissionGrants/$EXISTING_GRANT" \
+                --body '{"scope": "openid profile User.Read"}'; then
+                echo "Admin consent (grant existant mis a jour) sur $APP_NAME"
+              else
+                echo "::warning::Echec mise a jour admin consent sur $APP_NAME"
+              fi
+            else
+              if az rest --method POST \
+                --url "https://graph.microsoft.com/v1.0/oauth2PermissionGrants" \
+                --body "{\"clientId\": \"$SP_ID\", \"consentType\": \"AllPrincipals\", \"resourceId\": \"$GRAPH_SP_ID\", \"scope\": \"openid profile User.Read\"}"; then
+                echo "Admin consent accorde sur $APP_NAME"
+              else
+                echo "::warning::Echec du grant admin consent sur $APP_NAME"
+              fi
+            fi
           fi
 
       - name: "9. Terraform Destroy"
