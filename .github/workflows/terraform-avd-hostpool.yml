@@ -824,7 +824,7 @@ jobs:
           # deleguees par defaut (openid/profile/User.Read) de l App Registration AADKERB.
           # Necessite que le SP OIDC ait un role privilegie (Cloud Application
           # Administrator ou superieur) en plus de Application.ReadWrite.All.
-          if az ad app permission admin-consent --id "$APP_ID" 2>/dev/null; then
+          if az ad app permission admin-consent --id "$APP_ID"; then
             echo "Admin consent accorde sur $APP_NAME"
           else
             echo "::warning::Echec du grant admin consent sur $APP_NAME — role privilegie manquant sur le SP OIDC (cf. ticket SNOW Application.ReadWrite.All + role Cloud Application Administrator)"
