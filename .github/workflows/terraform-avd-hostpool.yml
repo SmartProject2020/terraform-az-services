@@ -604,7 +604,7 @@ jobs:
           SA_NAME="${{ steps.names.outputs.sa }}"
           SHARE_FULL_NAME=$(echo "${{ inputs.application_id }}-fslogix" | tr '[:upper:]' '[:lower:]')
           DIR_ADDR="azurerm_storage_share_directory.profils"
-          DIR_URL="https://${SA_NAME}.file.core.windows.net/${SHARE_FULL_NAME}/profils"
+          DIR_URL="https://${SA_NAME}.file.core.windows.net/${SHARE_FULL_NAME}/profiles"
 
           # azurerm_storage_share_directory attend l URL HTTPS (pas l ID ARM)
           # Si la ressource est dans le state mais pointe vers une ancienne SA (pollution),
