@@ -373,11 +373,14 @@ jobs:
           SETTING="${{ inputs.setting }}"
           SUBNET_NAME=$(echo "${PLAQUE}-${SETTING}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SNET01" | tr '[:lower:]' '[:upper:]')
           NETWORK_KEY="${SETTING}-${{ inputs.network_zone }}"
+          # KV_NAME/KV_RG : Key Vault AVD partage, co-localise avec le VNET/RT
+          # de cette combinaison SETTING+NETWORK_ZONE (confirme sur le tenant
+          # Servier reel le 2026-08-24 — meme table que locals.tf network_lookup).
           case "$NETWORK_KEY" in
-            "PRD-standard") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET01" ;;
-            "PRD-critical") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET02" ;;
-            "NPR-standard") VNET_RG="EM50-NPR-AVDAZ-TST-RG01"; VNET_NAME="EM50-NPR-AVDAZ-VNET01" ;;
-            *)               VNET_RG=""; VNET_NAME="" ;;
+            "PRD-standard") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET01"; KV_NAME="EM50-PRD-AVDAZ-KV01"; KV_RG="EM50-PRD-AVDAZ-PRD-RG01" ;;
+            "PRD-critical") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET02"; KV_NAME="EM50-PRD-AVDAZ-KV01"; KV_RG="EM50-PRD-AVDAZ-PRD-RG01" ;;
+            "NPR-standard") VNET_RG="EM50-NPR-AVDAZ-TST-RG01"; VNET_NAME="EM50-NPR-AVDAZ-VNET01"; KV_NAME="EM50-NPR-AVD00-KV02"; KV_RG="EM50-NPR-AVD00-POC-RG01" ;;
+            *)               VNET_RG=""; VNET_NAME=""; KV_NAME=""; KV_RG="" ;;
           esac
           SNET_ADDR="module.subnet.azurerm_subnet.this"
           if [ -n "${VNET_RG:-}" ]; then
@@ -481,11 +484,8 @@ jobs:
           fi
 
           # ── Mot de passe admin local (Key Vault) ──────────────────────────
-          # KV_NAME/KV_RG suivent le meme defaut que locals.tf (kv_name/
-          # kv_resource_group_name, coalesce sur var.KV_NAME/KV_RESOURCE_GROUP_NAME
-          # desormais toujours vides depuis le retrait des inputs correspondants).
-          KV_NAME="${PLAQUE}-${SETTING}-AVD00-KV01"
-          KV_RG="${PLAQUE}-${SETTING}-AVD00-${SETTING}-RG01"
+          # KV_NAME/KV_RG deja calcules plus haut (case "$NETWORK_KEY", meme
+          # table que locals.tf network_lookup).
           SECRET_NAME="avdlocaladmin-${HP_NAME}"
           RAND_ADDR="random_password.admin"
           SECRET_ADDR="azurerm_key_vault_secret.admin"

@@ -17,27 +17,41 @@ locals {
   # Table de correspondance SETTING+NETWORK_ZONE -> VNET/RG cible, confirmee
   # par l'equipe reseau (cf. memoire architecture v2).
   # ============================================================================
+  # kv_name/kv_resource_group_name : Key Vault AVD partage, co-localise dans
+  # le meme Resource Group que le VNET/RT partage de cette combinaison
+  # SETTING+NETWORK_ZONE (confirme par Ramzi sur le tenant Servier reel,
+  # 2026-08-24 — remplace l ancienne formule generique ${PLAQUE}-${SETTING}-
+  # AVD00-KV01 qui ne correspondait a aucun KV reel).
   network_lookup = {
     "PRD-standard" = {
-      resource_group_name  = "EM50-PRD-AVDAZ-PRD-RG01"
-      virtual_network_name = "EM50-PRD-AVDAZ-VNET01"
-      vnet_address_space   = "10.202.0.0/18"
-      newbits              = 6
-      route_table_name     = "EM50-PRD-AVDAZ-RT01"
+      resource_group_name    = "EM50-PRD-AVDAZ-PRD-RG01"
+      virtual_network_name   = "EM50-PRD-AVDAZ-VNET01"
+      vnet_address_space     = "10.202.0.0/18"
+      newbits                = 6
+      route_table_name       = "EM50-PRD-AVDAZ-RT01"
+      kv_name                = "EM50-PRD-AVDAZ-KV01"
+      kv_resource_group_name = "EM50-PRD-AVDAZ-PRD-RG01"
     }
     "PRD-critical" = {
-      resource_group_name  = "EM50-PRD-AVDAZ-PRD-RG01"
-      virtual_network_name = "EM50-PRD-AVDAZ-VNET02"
-      vnet_address_space   = "10.202.64.0/20"
-      newbits              = 4
-      route_table_name     = "EM50-PRD-AVDAZ-RT01"
+      resource_group_name    = "EM50-PRD-AVDAZ-PRD-RG01"
+      virtual_network_name   = "EM50-PRD-AVDAZ-VNET02"
+      vnet_address_space     = "10.202.64.0/20"
+      newbits                = 4
+      route_table_name       = "EM50-PRD-AVDAZ-RT01"
+      kv_name                = "EM50-PRD-AVDAZ-KV01"
+      kv_resource_group_name = "EM50-PRD-AVDAZ-PRD-RG01"
     }
+    # TEMPORAIRE (nettoyage itmatched) : kv_name/kv_resource_group_name pointes
+    # sur EM50-NPR-AVD00-KV02/POC-RG01 (itmatched) au lieu du vrai KV Servier
+    # EM50-TST-AVDAZ-KV01 (absent sur itmatched) — a reverter apres nettoyage.
     "NPR-standard" = {
-      resource_group_name  = "EM50-NPR-AVDAZ-TST-RG01"
-      virtual_network_name = "EM50-NPR-AVDAZ-VNET01"
-      vnet_address_space   = "10.202.80.0/20"
-      newbits              = 4
-      route_table_name     = "EM50-NPR-AVDAZ-RT01"
+      resource_group_name    = "EM50-NPR-AVDAZ-TST-RG01"
+      virtual_network_name   = "EM50-NPR-AVDAZ-VNET01"
+      vnet_address_space     = "10.202.80.0/20"
+      newbits                = 4
+      route_table_name       = "EM50-NPR-AVDAZ-RT01"
+      kv_name                = "EM50-NPR-AVD00-KV02"
+      kv_resource_group_name = "EM50-NPR-AVD00-POC-RG01"
     }
   }
 
@@ -99,15 +113,12 @@ locals {
   scaling_plan_time_zone = lookup(local.scaling_plan_timezone_lookup, var.PLAQUE, "Romance Standard Time")
 
   # ============================================================================
-  # Key Vault AVD partage (1 par subscription/env — APPLICATION_ID fixe AVD00)
-  # Convention : ${PLAQUE}-${SETTING}-AVD00-KV01 / ${PLAQUE}-${SETTING}-AVD00-${SETTING}-RG01
-  # Surchargeables via KV_NAME / KV_RESOURCE_GROUP_NAME si besoin.
+  # Key Vault AVD partage (1 par SETTING+NETWORK_ZONE, co-localise avec le
+  # VNET/RT partage — cf. network_lookup). Surchargeables via KV_NAME /
+  # KV_RESOURCE_GROUP_NAME si besoin (ex: KV different en POC/test).
   # ============================================================================
-  # TEMPORAIRE (test itmatched) : KV02/POC-RG01 au lieu du defaut KV01/NPR-RG01 —
-  # a reverter apres validation, cf. memoire (KV01 indisponible sur itmatched,
-  # nom pris globalement par le vrai KV du tenant Servier).
-  kv_name                = upper(var.KV_NAME != null && var.KV_NAME != "" ? var.KV_NAME : "${var.PLAQUE}-${var.SETTING}-AVD00-KV02")
-  kv_resource_group_name = upper(var.KV_RESOURCE_GROUP_NAME != null && var.KV_RESOURCE_GROUP_NAME != "" ? var.KV_RESOURCE_GROUP_NAME : "${var.PLAQUE}-${var.SETTING}-AVD00-POC-RG01")
+  kv_name                = upper(var.KV_NAME != null && var.KV_NAME != "" ? var.KV_NAME : local.network.kv_name)
+  kv_resource_group_name = upper(var.KV_RESOURCE_GROUP_NAME != null && var.KV_RESOURCE_GROUP_NAME != "" ? var.KV_RESOURCE_GROUP_NAME : local.network.kv_resource_group_name)
   sa_public_network_access_enabled = true
   common_tags = {
     "managed-by"          = "terraform"
