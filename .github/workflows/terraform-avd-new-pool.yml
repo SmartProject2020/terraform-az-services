@@ -198,7 +198,7 @@ permissions:
 jobs:
   terraform:
     name: "Terraform ${{ inputs.operation }} - ${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }} - ${{ inputs.pool_type }}${{ inputs.pool_id }} (HostPool+SessionHost)"
-    runs-on: "Automation_linux_pool"
+    runs-on: ubuntu-latest
 
     env:
       # ---- Variables Terraform partagees (memes valeurs pour les deux root modules) ----
