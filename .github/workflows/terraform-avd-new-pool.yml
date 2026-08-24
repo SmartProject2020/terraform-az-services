@@ -1,0 +1,1220 @@
+# ==============================================================================
+# GitHub Actions - Terraform AVD New VDI Pool (Host Pool + Session Hosts)
+# Auth : OIDC Workload Identity Federation (zero secret)
+# Gere : Host Pool AVD complet (RG, Storage FSLogix, Private Endpoint, Entra ID
+#        groups, RBAC, AppGroup, Workspace, ScalingPlan) PUIS les Session Hosts
+#        (VM Windows + NIC + jonction Entra ID + FSLogix + enregistrement AVD)
+#        rattaches a ce Host Pool, dans un seul run.
+#
+# Correspond au SR ServiceNow "New VDI Pool" (TAD section 8.1.1) de bout en
+# bout — fusionne dans un seul workflow ce qui necessitait auparavant deux
+# declenchements manuels successifs (terraform-avd-hostpool.yml puis
+# terraform-avd-sessionhost.yml).
+#
+# Ce workflow NE remplace PAS les deux workflows individuels :
+#   - terraform-avd-hostpool.yml reste utilisable seul (reparation cible,
+#     modification d'un Host Pool existant sans toucher aux Session Hosts)
+#   - terraform-avd-sessionhost.yml reste utilisable seul pour le SR
+#     "Resize VDI" (ajout/retrait de Session Hosts sur un pool DEJA existant,
+#     sans re-toucher le Host Pool)
+#
+# Ordre d'execution (important) :
+#   - plan / apply : Host Pool D'ABORD (le Session Host lit son remote_state),
+#     puis Session Hosts.
+#   - destroy : Session Hosts D'ABORD (sinon la destruction du Resource Group
+#     du Host Pool supprimerait les VM sans jamais mettre a jour le state
+#     Session Host — orphelins garantis), puis Host Pool EN DERNIER. C'est
+#     pour ca que l'etape "Terraform Destroy" du Host Pool est physiquement
+#     placee tout en bas du fichier, apres tout le bloc Session Host — les
+#     etapes de preparation (imports, etc.) restent inconditionnelles comme
+#     dans les workflows d'origine, seul l'ordre des VRAIES destructions
+#     terraform destroy est garanti par la position des steps dans ce fichier.
+#
+# host_pool_name n'est PAS un input ici (contrairement a terraform-avd-
+# sessionhost.yml seul) : il est deduit de pool_type+pool_id, deja fournis
+# pour le Host Pool qu'on cree dans le meme run.
+# ==============================================================================
+
+name: Terraform - AVD New VDI Pool (Host Pool + Session Hosts)
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Operation Terraform"
+        required: true
+        type: choice
+        options: [plan, apply, destroy]
+
+      subscription_id:
+        description: "Azure Subscription ID"
+        required: true
+        type: string
+
+      plaque:
+        description: "Plaque"
+        required: true
+        type: choice
+        options: [EM50, AM50, AP50, GL50]
+
+      application_id:
+        description: "Application ID (namespace AVD, ex: AVD00)"
+        required: false
+        default: "AVD00"
+        type: string
+
+      setting:
+        description: "Setting"
+        required: true
+        type: choice
+        options: [NPR, PRD]
+
+      env:
+        description: "Environnement applicatif"
+        required: true
+        type: choice
+        options: [PRD, PPR, VAL, DEV, TST, UAT, BOX, LRN, POC]
+
+      # ------------------------------------------------------------------
+      # Host Pool — convention HLD v0.1, nommage <M|P><PoolID><version>
+      # ------------------------------------------------------------------
+      network_zone:
+        description: "Zone reseau du subnet dedie au Host Pool"
+        required: true
+        type: choice
+        options: [standard, critical]
+
+      pool_type:
+        description: "Type de pool : M (Multisession/Pooled) ou P (Personnel/Personal)"
+        required: true
+        type: choice
+        options: [M, P]
+
+      pool_id:
+        description: "Identifiant metier du pool incluant son increment (ex: ADMSYS1, ADMSYS2)"
+        required: true
+        type: string
+
+      friendly_name:
+        description: "Nom convivial (Pool Description du formulaire ServiceNow)"
+        required: false
+        default: ""
+        type: string
+
+      load_balancer_type:
+        description: "Algorithme de repartition de charge"
+        required: true
+        default: "DepthFirst"
+        type: choice
+        options: [DepthFirst, BreadthFirst, Persistent]
+
+      personal_desktop_assignment_type:
+        description: "Mode d'attribution (Personal uniquement)"
+        required: false
+        default: ""
+        type: choice
+        options: ["", Automatic, Direct]
+
+      maximum_sessions_allowed:
+        description: "Nb max de sessions par session host (Pooled uniquement)"
+        required: false
+        default: ""
+        type: string
+
+      location:
+        description: "Azure Region"
+        required: true
+        default: "North Europe"
+        type: string
+
+      nb_users:
+        description: "Nombre d'utilisateurs du pool (quota FSLogix = nb_users * 5 Go, min 100 Go)"
+        required: true
+        type: string
+
+      # ------------------------------------------------------------------
+      # Session Hosts — dimensionnement (TAD section 2.2) : vm_size et
+      # session_host_count derives (locals.tf) de pool_type + workload_type/
+      # user_count (Personal) ou user_tier/vm_count_override (MultiSession).
+      # ------------------------------------------------------------------
+      workload_type:
+        description: "Type de charge de travail (pools Personal uniquement) -> determine vm_size"
+        required: false
+        type: choice
+        options: ["", Light, Standard, "Standard+Teams", Heavy, Power]
+
+      user_count:
+        description: "Nombre d'utilisateurs (pools Personal uniquement) : 1 utilisateur = 1 Session Host"
+        required: false
+        type: string
+
+      user_tier:
+        description: "Palier d'utilisateurs (pools MultiSession uniquement) -> determine vm_size et session_host_count"
+        required: false
+        type: choice
+        options: ["", "0-10", "10-30", "30-50", "50-100", "100-250", "250+"]
+
+      vm_count_override:
+        description: "Nombre TOTAL de Session Hosts force pour le pool. Laisser vide en usage normal"
+        required: false
+        type: string
+
+      vm_size_override:
+        description: "Force vm_size (contournement quota ponctuel sur un environnement de test) — laisser vide en usage normal"
+        required: false
+        default: ""
+        type: string
+
+      start_index:
+        description: "Numero incremental de depart (1 en usage normal pour une creation initiale)"
+        required: false
+        default: "1"
+        type: string
+
+      image_version:
+        description: "Version de l'image marketplace (laisser vide -> defaut derive de pool_type, cf. locals.tf)"
+        required: false
+        default: ""
+        type: string
+
+      entra_id_join:
+        description: "Jonction Microsoft Entra ID (TAD 3.3 'Entra ID uniquement ?')"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+      intune_enrollment_enabled:
+        description: "Enrollment MDM Intune (mdmId) a la jonction Entra ID — TAD section 7. Desactiver sur itmatched (MDM non configure, casse le join)"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    name: "Terraform ${{ inputs.operation }} - ${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }} - ${{ inputs.pool_type }}${{ inputs.pool_id }} (HostPool+SessionHost)"
+    runs-on: "Automation_linux_pool"
+
+    env:
+      # ---- Variables Terraform partagees (memes valeurs pour les deux root modules) ----
+      TF_VAR_PLAQUE:             "${{ inputs.plaque }}"
+      TF_VAR_SETTING:            "${{ inputs.setting }}"
+      TF_VAR_ENV:                "${{ inputs.env }}"
+      TF_VAR_APPLICATION_ID:     "${{ inputs.application_id }}"
+
+      # ---- Variables Terraform specifiques Host Pool (ignorees par le module SessionHost) ----
+      TF_VAR_NETWORK_ZONE:        "${{ inputs.network_zone }}"
+      TF_VAR_POOL_TYPE:           "${{ inputs.pool_type }}"
+      TF_VAR_POOL_ID:             "${{ inputs.pool_id }}"
+      TF_VAR_NB_USERS:            "${{ inputs.nb_users }}"
+      TF_VAR_HUB_SUBSCRIPTION_ID: "${{ vars.HUB_SUBSCRIPTION_ID }}"
+
+      # ---- Variables Terraform specifiques Session Host (ignorees par le module HostPool) ----
+      # HOST_POOL_NAME (non uppercase) doit matcher EXACTEMENT la concatenation
+      # utilisee par le Host Pool pour son propre nom de workspace ci-dessous.
+      TF_VAR_HOST_POOL_NAME:        "${{ inputs.pool_type }}${{ inputs.pool_id }}"
+      TF_VAR_avd_agent_package_url: "${{ vars.AVD_AGENT_PACKAGE_URL || 'https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_1.0.03448.1358.zip' }}"
+
+      # ---- Fichiers/workspaces Terraform Host Pool ----
+      HP_TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-hostpool-${{ inputs.pool_type }}${{ inputs.pool_id }}"
+      HP_TF_VARFILE:   "vars/${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-${{ inputs.pool_type }}${{ inputs.pool_id }}.tfvars"
+      HP_TF_PLANFILE:  "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-${{ inputs.pool_type }}${{ inputs.pool_id }}.tfplan"
+
+      # ---- Fichiers/workspaces Terraform Session Host ----
+      SH_TF_WORKSPACE: "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-sessionhost-${{ inputs.pool_type }}${{ inputs.pool_id }}"
+      SH_TF_VARFILE:   "vars/${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.application_id }}-${{ inputs.env }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-sessionhost.tfvars"
+      SH_TF_PLANFILE:  "${{ inputs.plaque }}-${{ inputs.env }}-${{ inputs.application_id }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-sessionhost.tfplan"
+
+    steps:
+      - name: "0. Inputs recus (ServiceNow -> GitHub Actions)"
+        run: |
+          echo "=================================================="
+          echo "  INPUTS RECUS"
+          echo "=================================================="
+          echo '${{ toJson(inputs) }}' | jq '.'
+          echo "=================================================="
+
+      # ========================================================================
+      # ETAPE 0 : Garde-fous
+      # ========================================================================
+      - name: "Blocage - Destroy interdit en PRD"
+        if: inputs.setting == 'PRD' && inputs.operation == 'destroy'
+        run: |
+          echo "::error::DESTROY interdit en PRD — utiliser le workflow de decommission dedie (avec verification des sessions actives)"
+          exit 1
+
+      - name: "Clean git config"
+        run: |
+          git config --global --unset-all http.https://github.com/.extraheader || true
+
+      # ========================================================================
+      # ETAPE 1 : Token + Checkout (partage Host Pool / Session Host)
+      # ========================================================================
+      - name: "1. Token GitHub App"
+        id: app-token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+
+      - name: "2. Checkout terraform-az-services"
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: poc
+          token: ${{ steps.app-token.outputs.token }}
+          path: terraform-az-services
+          persist-credentials: false
+
+      - name: "2b. Setup Terraform"
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+          terraform_wrapper: false
+
+      # ========================================================================
+      # ETAPE 3 : Routing OIDC + backend (partage — memes coordonnees
+      # PLAQUE/SETTING/ENV pour les deux root modules)
+      # ========================================================================
+      - name: "3. Resolution secret Client ID + backend"
+        id: routing
+        run: |
+          set -euo pipefail
+          PLAQUE="${{ inputs.plaque }}"
+          SETTING="${{ inputs.setting }}"
+          ENV="${{ inputs.env }}"
+
+          SECRET_NAME="AZURE_CLIENT_ID_SC_OIDC_${PLAQUE}_${SETTING}"
+          BACKEND_FILE="backends/${PLAQUE}-${ENV}.tfbackend"
+
+          echo "secret=$SECRET_NAME"   >> "$GITHUB_OUTPUT"
+          echo "backend=$BACKEND_FILE" >> "$GITHUB_OUTPUT"
+          echo "Secret name  : $SECRET_NAME"
+          echo "Backend file : $BACKEND_FILE"
+
+      # ========================================================================
+      # ETAPE 4 : Azure Login (partage)
+      # ========================================================================
+      - name: "4. Azure Login (OIDC)"
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets[steps.routing.outputs.secret] }}
+          tenant-id:       ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ inputs.subscription_id }}
+
+      # ========================================================================
+      # ========================== HOST POOL ==================================
+      # ========================================================================
+
+      - name: "HP.6. Generation tfvars"
+        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
+        run: |
+          set -euo pipefail
+          mkdir -p vars
+
+          # servier_environment (tag) derive de env, force a PRD si setting=PRD
+          # (AVD ne distingue pas TST/UAT/PPR — cf. memoire architecture).
+          SERVIER_ENV="${{ inputs.env }}"
+          if [ "${{ inputs.setting }}" = "PRD" ]; then
+            SERVIER_ENV="PRD"
+          fi
+
+          to_str_or_null() { [ -z "$1" ] && echo "null" || printf '"%s"' "$1"; }
+          to_num_or_null() { [ -z "$1" ] && echo "null" || echo "$1"; }
+
+          # Seules les valeurs pilotees par un input ServiceNow sont ecrites ici.
+          # Tout le reste (description, validate_environment, start_vm_on_connect,
+          # custom_rdp_properties, registration_expiration_hours,
+          # sa_public_network_access_enabled...) n'est plus ecrit : le defaut du
+          # module (Automation_Services_Avd/HostPool/variables.tf) s'applique
+          # tout seul, sans duplication ici.
+          cat > "${{ env.HP_TF_VARFILE }}" << EOF
+          location                         = "${{ inputs.location }}"
+          servier_environment              = "${SERVIER_ENV}"
+          friendly_name                    = $(to_str_or_null "${{ inputs.friendly_name }}")
+          load_balancer_type               = "${{ inputs.load_balancer_type }}"
+          personal_desktop_assignment_type = $(to_str_or_null "${{ inputs.personal_desktop_assignment_type }}")
+          maximum_sessions_allowed         = $(to_num_or_null "${{ inputs.maximum_sessions_allowed }}")
+          EOF
+
+          echo "----- ${{ env.HP_TF_VARFILE }} -----"
+          cat "${{ env.HP_TF_VARFILE }}"
+
+      - name: "HP.6b. Break state lock si existant"
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          BACKEND_FILE="terraform-az-services/Automation_Services_Avd/HostPool/${{ steps.routing.outputs.backend }}"
+          SA=$(grep -E '^storage_account_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          CONTAINER=$(grep -E '^container_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          BLOB="avd-hostpool-tfstateenv:${{ env.HP_TF_WORKSPACE }}"
+          echo "Break lock sur $SA/$CONTAINER/$BLOB..."
+          az storage blob lease break \
+            --account-name "$SA" \
+            --container-name "$CONTAINER" \
+            --blob-name "$BLOB" \
+            --auth-mode login 2>/dev/null \
+            && echo "Lock libere" || echo "Pas de lock actif"
+
+      - name: "HP.6c. Get token for Terraform modules"
+        id: get_token_tf_hp
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+          revoke: false
+
+      - name: "HP.7. Terraform Init + Workspace"
+        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+          GITHUB_TOKEN:        ${{ steps.get_token_tf_hp.outputs.token }}
+        run: |
+          set -euo pipefail
+          echo "machine github.com login x-access-token password ${GITHUB_TOKEN}" > ~/.netrc
+          chmod 600 ~/.netrc
+          unset TF_WORKSPACE
+          terraform init -reconfigure -backend-config="${{ steps.routing.outputs.backend }}"
+          terraform workspace new "${{ env.HP_TF_WORKSPACE }}" 2>/dev/null || \
+          terraform workspace select "${{ env.HP_TF_WORKSPACE }}"
+          rm -f ~/.netrc
+
+      - name: "HP.8a. Calcul noms ressources (RG + Host Pool + Storage)"
+        id: names
+        run: |
+          set -euo pipefail
+          RG=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-${{ inputs.env }}-RG01" | tr '[:lower:]' '[:upper:]')
+          HP=$(echo "${{ inputs.pool_type }}${{ inputs.pool_id }}" | tr '[:lower:]' '[:upper:]')
+          SA=$(echo "${{ inputs.plaque }}${{ inputs.setting }}${{ inputs.pool_type }}${{ inputs.pool_id }}sta01" | tr '[:upper:]' '[:lower:]')
+          PE=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-PE01" | tr '[:lower:]' '[:upper:]')
+          SP=$(echo "${{ inputs.plaque }}-${{ inputs.setting }}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SP01" | tr '[:lower:]' '[:upper:]')
+          echo "rg=$RG" >> "$GITHUB_OUTPUT"
+          echo "hp=$HP" >> "$GITHUB_OUTPUT"
+          echo "sa=$SA" >> "$GITHUB_OUTPUT"
+          echo "pe=$PE" >> "$GITHUB_OUTPUT"
+          echo "sp=$SP" >> "$GITHUB_OUTPUT"
+          echo "RG=$RG | HostPool=$HP | StorageAccount=$SA | PE=$PE | SP=$SP"
+
+      # ========================================================================
+      # HP.8b : Import ressources existantes
+      #
+      # Logique :
+      #   - HostPool existe -> import dans le state (pas de creation)
+      #   - Absent -> Terraform cree le Host Pool + registration info
+      # Le Resource Group est pre-existant (data source) — jamais touche ici.
+      # ========================================================================
+      - name: "HP.8b. Import ressources existantes"
+        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          set -euo pipefail
+          SUB="${{ inputs.subscription_id }}"
+          RG_NAME="${{ steps.names.outputs.rg }}"
+          HP_NAME="${{ steps.names.outputs.hp }}"
+
+          RG_ADDR="azurerm_resource_group.rg"
+          HP_ADDR="module.host_pool.azurerm_virtual_desktop_host_pool.this"
+          REG_ADDR="module.host_pool.azurerm_virtual_desktop_host_pool_registration_info.this"
+
+          state_id() {
+            terraform state show "$1" 2>/dev/null | grep "^.*id " | head -1 | sed -E 's/.*= *"([^"]+)".*/\1/' || echo ""
+          }
+
+          STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+
+          # ── Subnet bootstrap — DOIT ETRE EN PREMIER ──────────────────────────
+          # Le module.private_endpoint contient un data.azurerm_subnet qui est
+          # resolu lors de TOUT terraform import, meme pour d'autres ressources.
+          # Si le subnet n'existe pas (nouveau pool), tous les imports echouent.
+          # Solution : creer le subnet via -target avant tout autre import.
+          PLAQUE="${{ inputs.plaque }}"
+          SETTING="${{ inputs.setting }}"
+          SUBNET_NAME=$(echo "${PLAQUE}-${SETTING}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SNET01" | tr '[:lower:]' '[:upper:]')
+          NETWORK_KEY="${SETTING}-${{ inputs.network_zone }}"
+          case "$NETWORK_KEY" in
+            "PRD-standard") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET01" ;;
+            "PRD-critical") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET02" ;;
+            "NPR-standard") VNET_RG="EM50-NPR-AVDAZ-TST-RG01"; VNET_NAME="EM50-NPR-AVDAZ-VNET01" ;;
+            *)               VNET_RG=""; VNET_NAME="" ;;
+          esac
+          SNET_ADDR="module.subnet.azurerm_subnet.this"
+          if [ -n "${VNET_RG:-}" ]; then
+            SNET_ID="/subscriptions/${SUB}/resourceGroups/${VNET_RG}/providers/Microsoft.Network/virtualNetworks/${VNET_NAME}/subnets/${SUBNET_NAME}"
+            SNET_EXISTS=$(az network vnet subnet show --ids "$SNET_ID" --query id -o tsv 2>/dev/null || echo "")
+            if [ -n "$SNET_EXISTS" ]; then
+              if ! echo "$STATE_LIST" | grep -qF "$SNET_ADDR"; then
+                echo "Import Subnet $SUBNET_NAME..."
+                terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$SNET_ADDR" "$SNET_ID"
+                STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+              else
+                echo "Subnet $SUBNET_NAME deja dans le state. Import ignore."
+              fi
+
+              # L'ID Terraform de azurerm_subnet_route_table_association EST l'ID du
+              # subnet (pas un ID propre). Si le subnet existait deja (cas ci-dessus),
+              # une Route Table peut deja lui etre associee cote Azure independamment
+              # du state (ex: apres un clean_state) -> import obligatoire, sinon
+              # l'apply plante avec "already exists" sur la creation.
+              RTA_ADDR="module.subnet.azurerm_subnet_route_table_association.this"
+              if ! echo "$STATE_LIST" | grep -qF "$RTA_ADDR"; then
+                RT_ASSOCIATED=$(az network vnet subnet show --ids "$SNET_ID" --query "routeTable.id" -o tsv 2>/dev/null || echo "")
+                if [ -n "$RT_ASSOCIATED" ]; then
+                  echo "Route Table deja associee au subnet — import..."
+                  terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$RTA_ADDR" "$SNET_ID"
+                  STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+                else
+                  echo "Aucune Route Table associee au subnet — sera creee par Terraform."
+                fi
+              else
+                echo "Route Table Association deja dans le state. Import ignore."
+              fi
+            else
+              # Nouveau pool : le subnet doit exister avant tout import (sinon le
+              # data source PE echoue). On le cree maintenant via -target.
+              echo "Subnet $SUBNET_NAME absent — creation via terraform apply -target=module.subnet..."
+              terraform apply -target=module.subnet \
+                -var-file="${{ env.HP_TF_VARFILE }}" \
+                -auto-approve
+              STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+              echo "Subnet cree."
+            fi
+          fi
+
+          # ── Resource Group — cree si absent, importe si existant ─────────────
+          RG_EXISTS=$(az group show --name "$RG_NAME" --subscription "$SUB" \
+            --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$RG_EXISTS" ]; then
+            if ! echo "$STATE_LIST" | grep -qF "$RG_ADDR"; then
+              echo "Import Resource Group $RG_NAME..."
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$RG_ADDR" "$RG_EXISTS"
+              STATE_LIST=$(terraform state list 2>/dev/null || echo "")
+            else
+              echo "Resource Group $RG_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "Resource Group $RG_NAME absent — sera cree par Terraform."
+          fi
+
+          # ── Host Pool ────────────────────────────────────────────────────────
+          # az resource show renvoie l'id avec une casse (resourcegroups/hostpools)
+          # incompatible avec le parseur d'ID du provider azurerm (resourceGroups/hostPools).
+          # On l'utilise uniquement pour verifier l'existence, et on reconstruit l'ID
+          # avec la casse canonique attendue par terraform import / le state.
+          HP_EXISTS=$(az resource show \
+            --resource-type "Microsoft.DesktopVirtualization/hostPools" \
+            --name "$HP_NAME" \
+            --resource-group "$RG_NAME" \
+            --subscription "$SUB" \
+            --query "id" -o tsv 2>/dev/null || echo "")
+
+          if [ -n "$HP_EXISTS" ]; then
+            HP_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/hostPools/${HP_NAME}"
+            echo "Host Pool existe : $HP_ID"
+
+            if echo "$STATE_LIST" | grep -qF "$HP_ADDR"; then
+              STATE_HP_ID=$(state_id "$HP_ADDR")
+              if [ -n "$STATE_HP_ID" ] && [ "$STATE_HP_ID" != "$HP_ID" ]; then
+                echo "Host Pool dans le state different -> nettoyage + reimport"
+                terraform state rm "$HP_ADDR"  || true
+                terraform state rm "$REG_ADDR" || true
+                terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$HP_ADDR" "$HP_ID"
+              else
+                echo "Host Pool deja dans le state avec le bon ID. Import ignore."
+              fi
+            else
+              echo "Import Host Pool dans le state..."
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$HP_ADDR" "$HP_ID"
+            fi
+
+            # Le sous-objet registration info partage l'ID du Host Pool
+            if echo "$STATE_LIST" | grep -qF "$REG_ADDR"; then
+              echo "Registration info deja dans le state. Import ignore."
+            else
+              echo "Import registration info dans le state..."
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$REG_ADDR" "$HP_ID" || \
+                echo "::warning::Import registration info echoue — sera potentiellement recreee (nouveau token)"
+            fi
+          else
+            echo "Host Pool absent — sera cree par Terraform."
+          fi
+
+          # ── Mot de passe admin local (Key Vault) ──────────────────────────
+          # KV_NAME/KV_RG suivent le meme defaut que locals.tf (kv_name/
+          # kv_resource_group_name, coalesce sur var.KV_NAME/KV_RESOURCE_GROUP_NAME
+          # desormais toujours vides depuis le retrait des inputs correspondants).
+          KV_NAME="${PLAQUE}-${SETTING}-AVD00-KV01"
+          KV_RG="${PLAQUE}-${SETTING}-AVD00-${SETTING}-RG01"
+          SECRET_NAME="avdlocaladmin-${HP_NAME}"
+          RAND_ADDR="random_password.admin"
+          SECRET_ADDR="azurerm_key_vault_secret.admin"
+
+          if KV_SECRET_JSON=$(az keyvault secret show \
+            --vault-name "$KV_NAME" \
+            --name "$SECRET_NAME" 2>/dev/null); then
+
+            KV_PW=$(echo "$KV_SECRET_JSON" | jq -r '.value')
+            # azurerm_key_vault_secret import attend l'URL versionnee retournee par az cli
+            # ex: https://vault.vault.azure.net/secrets/name/abc123version
+            SECRET_ID=$(echo "$KV_SECRET_JSON" | jq -r '.id')
+            echo "::add-mask::$KV_PW"
+            echo "Secret '$SECRET_NAME' present dans '$KV_NAME' -> import..."
+
+            if ! echo "$STATE_LIST" | grep -qF "$SECRET_ADDR"; then
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$SECRET_ADDR" "$SECRET_ID"
+            else
+              echo "Secret deja dans le state. Import ignore."
+            fi
+
+            if ! echo "$STATE_LIST" | grep -qF "$RAND_ADDR"; then
+              # random_password supporte l'import depuis hashicorp/random >= 3.4.0
+              # Format : "<ID>" = virgule suivie de la valeur du mot de passe
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$RAND_ADDR" ",$KV_PW"
+            else
+              echo "random_password deja dans le state. Import ignore."
+            fi
+          else
+            echo "Secret '$SECRET_NAME' absent du KV '$KV_NAME' -> sera cree par Terraform."
+          fi
+
+          # ── Groupes Entra ID (Task #6) ────────────────────────────────────
+          # Prerequis : le SP OIDC doit avoir Group.ReadWrite.All (Microsoft Graph)
+          # Convention naming Servier : EM-GA-AVD-AVD<POOLNAME> (users) / INTUNE-WIN11-AVD-AVD<POOLNAME> (devices)
+          GROUP_USERS_NAME="EM-GA-AVD-AVD${HP_NAME}"
+
+          GROUP_USERS_ID=$(az ad group show --group "$GROUP_USERS_NAME" --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$GROUP_USERS_ID" ]; then
+            if ! echo "$STATE_LIST" | grep -qF "azuread_group.users"; then
+              echo "Import groupe $GROUP_USERS_NAME..."
+              # azuread v3+ attend le format OData /groups/{objectId}
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "azuread_group.users" "/groups/${GROUP_USERS_ID}"
+            else
+              echo "Groupe $GROUP_USERS_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "Groupe $GROUP_USERS_NAME absent — sera cree par Terraform."
+          fi
+
+          # ── Groupe DEVICES Entra ID ───────────────────────────────────────
+          GROUP_DEVICES_NAME="INTUNE-WIN11-AVD-AVD${HP_NAME}"
+          GROUP_DEVICES_ID=$(az ad group show --group "$GROUP_DEVICES_NAME" --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$GROUP_DEVICES_ID" ]; then
+            if ! echo "$STATE_LIST" | grep -qF "azuread_group.devices"; then
+              echo "Import groupe $GROUP_DEVICES_NAME..."
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "azuread_group.devices" "/groups/${GROUP_DEVICES_ID}"
+            else
+              echo "Groupe $GROUP_DEVICES_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "Groupe $GROUP_DEVICES_NAME absent — sera cree par Terraform."
+          fi
+
+          # ── AppGroup (Task #7) ────────────────────────────────────────────
+          DAG_NAME="${HP_NAME}-DAG"
+          DAG_EXISTS=$(az resource show \
+            --resource-type "Microsoft.DesktopVirtualization/applicationGroups" \
+            --name "$DAG_NAME" --resource-group "$RG_NAME" --subscription "$SUB" \
+            --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$DAG_EXISTS" ]; then
+            DAG_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/applicationGroups/${DAG_NAME}"
+            if ! echo "$STATE_LIST" | grep -qF "azurerm_virtual_desktop_application_group.dag"; then
+              echo "Import AppGroup $DAG_NAME..."
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "azurerm_virtual_desktop_application_group.dag" "$DAG_ID"
+            else
+              echo "AppGroup $DAG_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "AppGroup $DAG_NAME absent — sera cree par Terraform."
+            DAG_ID=""
+          fi
+
+          # ── Workspace (Task #7) ───────────────────────────────────────────
+          WS_NAME="${HP_NAME}"
+          WS_EXISTS=$(az resource show \
+            --resource-type "Microsoft.DesktopVirtualization/workspaces" \
+            --name "$WS_NAME" --resource-group "$RG_NAME" --subscription "$SUB" \
+            --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$WS_EXISTS" ]; then
+            WS_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/workspaces/${WS_NAME}"
+            if ! echo "$STATE_LIST" | grep -qF "azurerm_virtual_desktop_workspace.ws"; then
+              echo "Import Workspace $WS_NAME..."
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "azurerm_virtual_desktop_workspace.ws" "$WS_ID"
+            else
+              echo "Workspace $WS_NAME deja dans le state. Import ignore."
+            fi
+
+            # Association Workspace <-> AppGroup
+            if [ -n "$DAG_ID" ]; then
+              WS_DAG_IMPORT_ID="${WS_ID}|${DAG_ID}"
+              if ! echo "$STATE_LIST" | grep -qF "azurerm_virtual_desktop_workspace_application_group_association.ws_dag"; then
+                echo "Import association Workspace/AppGroup..."
+                terraform import -var-file="${{ env.HP_TF_VARFILE }}" \
+                  "azurerm_virtual_desktop_workspace_application_group_association.ws_dag" "$WS_DAG_IMPORT_ID" || \
+                  echo "::warning::Import association Workspace/AppGroup echoue — sera potentiellement recree"
+              else
+                echo "Association Workspace/AppGroup deja dans le state. Import ignore."
+              fi
+            fi
+          else
+            echo "Workspace $WS_NAME absent — sera cree par Terraform."
+          fi
+
+          # ── Repertoire profils (Task #4b) ────────────────────────────────
+          SA_NAME="${{ steps.names.outputs.sa }}"
+          SHARE_FULL_NAME=$(echo "${{ inputs.application_id }}-fslogix" | tr '[:upper:]' '[:lower:]')
+          DIR_ADDR="azurerm_storage_share_directory.profils"
+          DIR_URL="https://${SA_NAME}.file.core.windows.net/${SHARE_FULL_NAME}/profiles"
+
+          # azurerm_storage_share_directory attend l URL HTTPS (pas l ID ARM)
+          # Si la ressource est dans le state mais pointe vers une ancienne SA (pollution),
+          # on la retire et on reimporte avec le bon ID.
+          if echo "$STATE_LIST" | grep -qF "$DIR_ADDR"; then
+            STATE_DIR_ID=$(terraform state show "$DIR_ADDR" 2>/dev/null \
+              | grep '^\s*id' | head -1 \
+              | sed -E 's/.*= *"([^"]+)".*/\1/' || echo "")
+            if [ "$STATE_DIR_ID" = "$DIR_URL" ]; then
+              echo "Repertoire profils deja dans le state avec le bon ID. Import ignore."
+            else
+              echo "Repertoire profils dans le state avec un ancien ID ($STATE_DIR_ID) — reimport..."
+              terraform state rm "$DIR_ADDR" || true
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$DIR_ADDR" "$DIR_URL" || \
+                echo "::warning::Import repertoire profils echoue (absent ou droits data-plane insuffisants) — sera cree par Terraform"
+            fi
+          else
+            echo "Tentative import repertoire profils ($DIR_URL)..."
+            terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$DIR_ADDR" "$DIR_URL" || \
+              echo "::warning::Import repertoire profils echoue (absent ou droits data-plane insuffisants) — sera cree par Terraform"
+          fi
+
+          # ── Storage Account FSLogix ───────────────────────────────────────
+          SA_ADDR="module.storage_account.azurerm_storage_account.storage_account"
+          SA_EXISTS=$(az resource show \
+            --resource-type "Microsoft.Storage/storageAccounts" \
+            --name "$SA_NAME" --resource-group "$RG_NAME" --subscription "$SUB" \
+            --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$SA_EXISTS" ]; then
+            SA_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Storage/storageAccounts/${SA_NAME}"
+            if ! echo "$STATE_LIST" | grep -qF "$SA_ADDR"; then
+              echo "Import Storage Account $SA_NAME..."
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$SA_ADDR" "$SA_ID"
+            else
+              echo "Storage Account $SA_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "Storage Account $SA_NAME absent — sera cree par Terraform."
+          fi
+
+          # ── Fileshare FSLogix ─────────────────────────────────────────────
+          # Check via ARM (pas data-plane) : le SP OIDC n a pas forcement les droits SMB
+          SHARE_ADDR='module.fileshare.azurerm_storage_share.share["fslogix"]'
+          SHARE_ARM_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Storage/storageAccounts/${SA_NAME}/fileServices/default/shares/${SHARE_FULL_NAME}"
+          SHARE_EXISTS=$(az resource show --ids "$SHARE_ARM_ID" --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$SHARE_EXISTS" ]; then
+            if ! echo "$STATE_LIST" | grep -qF 'module.fileshare.azurerm_storage_share.share'; then
+              # azurerm v4 azurerm_storage_share import attend l URL HTTPS
+              SHARE_URL="https://${SA_NAME}.file.core.windows.net/${SHARE_FULL_NAME}"
+              echo "Import Fileshare $SHARE_FULL_NAME..."
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$SHARE_ADDR" "$SHARE_URL"
+            else
+              echo "Fileshare $SHARE_FULL_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "Fileshare $SHARE_FULL_NAME absent — sera cree par Terraform."
+          fi
+
+          # ── Role Assignments ──────────────────────────────────────────────
+          if [ -n "$GROUP_USERS_ID" ]; then
+            # vm_user_login : Virtual Machine User Login sur le RG
+            RA_VM_ADDR="azurerm_role_assignment.vm_user_login"
+            if ! echo "$STATE_LIST" | grep -qF "$RA_VM_ADDR"; then
+              RA_VM_ID=$(az role assignment list \
+                --scope "/subscriptions/${SUB}/resourceGroups/${RG_NAME}" \
+                --assignee "$GROUP_USERS_ID" \
+                --role "Virtual Machine User Login" \
+                --query "[0].id" -o tsv 2>/dev/null || echo "")
+              if [ -n "$RA_VM_ID" ]; then
+                echo "Import role assignment vm_user_login..."
+                terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$RA_VM_ADDR" "$RA_VM_ID"
+              else
+                echo "Role assignment vm_user_login absent — sera cree par Terraform."
+              fi
+            else
+              echo "Role assignment vm_user_login deja dans le state. Import ignore."
+            fi
+
+            # smb_contributor : Storage File Data SMB Share Contributor sur le SA
+            RA_SMB_ADDR="azurerm_role_assignment.smb_contributor"
+            if ! echo "$STATE_LIST" | grep -qF "$RA_SMB_ADDR"; then
+              SA_SCOPE="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Storage/storageAccounts/${SA_NAME}"
+              RA_SMB_ID=$(az role assignment list \
+                --scope "$SA_SCOPE" \
+                --assignee "$GROUP_USERS_ID" \
+                --role "Storage File Data SMB Share Contributor" \
+                --query "[0].id" -o tsv 2>/dev/null || echo "")
+              if [ -n "$RA_SMB_ID" ]; then
+                echo "Import role assignment smb_contributor..."
+                terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$RA_SMB_ADDR" "$RA_SMB_ID"
+              else
+                echo "Role assignment smb_contributor absent — sera cree par Terraform."
+              fi
+            else
+              echo "Role assignment smb_contributor deja dans le state. Import ignore."
+            fi
+
+            # dvd_user : Desktop Virtualization User sur l AppGroup
+            RA_DVD_ADDR="azurerm_role_assignment.dvd_user"
+            if [ -n "${DAG_ID:-}" ] && ! echo "$STATE_LIST" | grep -qF "$RA_DVD_ADDR"; then
+              RA_DVD_ID=$(az role assignment list \
+                --scope "$DAG_ID" \
+                --assignee "$GROUP_USERS_ID" \
+                --role "Desktop Virtualization User" \
+                --query "[0].id" -o tsv 2>/dev/null || echo "")
+              if [ -n "$RA_DVD_ID" ]; then
+                echo "Import role assignment dvd_user..."
+                terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$RA_DVD_ADDR" "$RA_DVD_ID"
+              else
+                echo "Role assignment dvd_user absent — sera cree par Terraform."
+              fi
+            else
+              echo "Role assignment dvd_user : AppGroup absent ou deja dans le state. Import ignore."
+            fi
+          fi
+
+          # ── Private Endpoint FSLogix ─────────────────────────────────────
+          PE_NAME="${{ steps.names.outputs.pe }}"
+          PE_ADDR="module.private_endpoint.azurerm_private_endpoint.endpoint"
+          PE_EXISTS=$(az resource show \
+            --resource-type "Microsoft.Network/privateEndpoints" \
+            --name "$PE_NAME" \
+            --resource-group "$RG_NAME" \
+            --subscription "$SUB" \
+            --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$PE_EXISTS" ]; then
+            PE_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.Network/privateEndpoints/${PE_NAME}"
+            if ! echo "$STATE_LIST" | grep -qF "$PE_ADDR"; then
+              echo "Import Private Endpoint $PE_NAME..."
+              terraform import -var-file="${{ env.HP_TF_VARFILE }}" "$PE_ADDR" "$PE_ID"
+            else
+              echo "Private Endpoint $PE_NAME deja dans le state. Import ignore."
+            fi
+          else
+            echo "Private Endpoint $PE_NAME absent — sera cree par Terraform."
+          fi
+
+          # ── ScalingPlan (Task #7, Pooled uniquement) ──────────────────────
+          if [ "${{ inputs.pool_type }}" = "M" ]; then
+            SP_NAME="${{ steps.names.outputs.sp }}"
+            SP_EXISTS=$(az resource show \
+              --resource-type "Microsoft.DesktopVirtualization/scalingPlans" \
+              --name "$SP_NAME" --resource-group "$RG_NAME" --subscription "$SUB" \
+              --query id -o tsv 2>/dev/null || echo "")
+            if [ -n "$SP_EXISTS" ]; then
+              SP_ID="/subscriptions/${SUB}/resourceGroups/${RG_NAME}/providers/Microsoft.DesktopVirtualization/scalingPlans/${SP_NAME}"
+              if ! echo "$STATE_LIST" | grep -q "azurerm_virtual_desktop_scaling_plan.sp"; then
+                echo "Import ScalingPlan $SP_NAME..."
+                terraform import -var-file="${{ env.HP_TF_VARFILE }}" \
+                  'azurerm_virtual_desktop_scaling_plan.sp[0]' "$SP_ID"
+              else
+                echo "ScalingPlan $SP_NAME deja dans le state. Import ignore."
+              fi
+            else
+              echo "ScalingPlan $SP_NAME absent — sera cree par Terraform."
+            fi
+          fi
+
+      - name: "HP.9. Terraform Plan"
+        if: inputs.operation != 'destroy'
+        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: terraform plan -var-file="${{ env.HP_TF_VARFILE }}" -out="${{ env.HP_TF_PLANFILE }}"
+
+      - name: "HP.9. Terraform Apply"
+        if: inputs.operation == 'apply'
+        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: terraform apply -input=false -auto-approve "${{ env.HP_TF_PLANFILE }}"
+
+      - name: "HP.9b. Configuration Kerberos AADKERB (post-apply)"
+        if: inputs.operation == 'apply'
+        env:
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_CLIENT_ID: ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          set -euo pipefail
+          SA_NAME="${{ steps.names.outputs.sa }}"
+          # L App Registration AADKERB est cree automatiquement par Azure avec le display name :
+          # "[Storage Account] <sa_name>.file.core.windows.net"
+          APP_NAME="[Storage Account] ${SA_NAME}.file.core.windows.net"
+
+          APP_LOOKUP=$(az ad app list \
+            --display-name "$APP_NAME" \
+            --query "[0].{id:id, appId:appId}" -o json 2>/dev/null || echo "")
+          APP_ID=$(echo "$APP_LOOKUP" | jq -r '.id // empty')
+          APP_CLIENT_ID=$(echo "$APP_LOOKUP" | jq -r '.appId // empty')
+
+          if [ -z "$APP_ID" ]; then
+            echo "::warning::App Registration '$APP_NAME' non trouvee — AADKERB pas encore actif ou permissions insuffisantes"
+            exit 0
+          fi
+
+          echo "App Registration AADKERB trouvee : $APP_ID"
+
+          # Tag kdc_enable_cloud_group_sids : requis pour que les SIDs de groupes Entra ID
+          # soient inclus dans les tickets Kerberos (FSLogix multi-user via groupes)
+          CURRENT_TAGS=$(az ad app show --id "$APP_ID" --query "tags" -o json 2>/dev/null || echo "[]")
+          if ! echo "$CURRENT_TAGS" | grep -q "kdc_enable_cloud_group_sids"; then
+            az ad app update --id "$APP_ID" --set "tags=[\"kdc_enable_cloud_group_sids\"]"
+            echo "Tag kdc_enable_cloud_group_sids configure sur $APP_NAME"
+          else
+            echo "Tag kdc_enable_cloud_group_sids deja present"
+          fi
+
+          # Grant admin consent (equivalent au bouton "Grant admin consent for <tenant>"
+          # dans App registrations > API permissions) sur les permissions Microsoft Graph
+          # deleguees par defaut (openid/profile/User.Read) de l App Registration AADKERB.
+          #
+          # NE PAS utiliser `az ad app permission admin-consent` : cette commande echoue
+          # systematiquement avec un SP OIDC (auth service principal / OIDC federe) —
+          # erreur "Unauthorized ... UnsupportedAccessTokenType", elle exige en interne
+          # un token utilisateur interactif (`az login`), incompatible avec CI. Aucun
+          # role Entra ID (teste : Cloud Application Administrator, Privileged Role
+          # Administrator) ne corrige ce point, c'est une limitation de la commande CLI
+          # elle-meme (confirme en session le 2026-08-20).
+          #
+          # Fix : creer/mettre a jour directement l objet oauth2PermissionGrant via
+          # Microsoft Graph (accepte les tokens app-only). clientId = objectId du
+          # Service Principal de l app AADKERB (pas l objectId de l App Registration
+          # — az ad sp show --id n accepte que l appId ou un objectId de SP, pas
+          # l objectId de l App Registration elle-meme).
+          SP_ID=$(az ad sp show --id "$APP_CLIENT_ID" --query id -o tsv 2>/dev/null || echo "")
+          if [ -z "$SP_ID" ]; then
+            echo "::warning::Service Principal introuvable pour $APP_NAME — admin consent ignore"
+          else
+            GRAPH_SP_ID=$(az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query "[0].id" -o tsv)
+            EXISTING_GRANT=$(az rest --method GET \
+              --url "https://graph.microsoft.com/v1.0/oauth2PermissionGrants?\$filter=clientId eq '$SP_ID' and resourceId eq '$GRAPH_SP_ID'" \
+              --query "value[0].id" -o tsv 2>/dev/null || echo "")
+
+            if [ -n "$EXISTING_GRANT" ]; then
+              if az rest --method PATCH \
+                --url "https://graph.microsoft.com/v1.0/oauth2PermissionGrants/$EXISTING_GRANT" \
+                --body '{"scope": "openid profile User.Read"}'; then
+                echo "Admin consent (grant existant mis a jour) sur $APP_NAME"
+              else
+                echo "::warning::Echec mise a jour admin consent sur $APP_NAME"
+              fi
+            else
+              if az rest --method POST \
+                --url "https://graph.microsoft.com/v1.0/oauth2PermissionGrants" \
+                --body "{\"clientId\": \"$SP_ID\", \"consentType\": \"AllPrincipals\", \"resourceId\": \"$GRAPH_SP_ID\", \"scope\": \"openid profile User.Read\"}"; then
+                echo "Admin consent accorde sur $APP_NAME"
+              else
+                echo "::warning::Echec du grant admin consent sur $APP_NAME"
+              fi
+            fi
+          fi
+
+      # ========================================================================
+      # ========================= SESSION HOST =================================
+      # (place APRES le Host Pool pour plan/apply : le remote_state du Host
+      # Pool doit deja avoir ete applique pour que ces steps trouvent les
+      # outputs attendus. Pour destroy, ces steps de preparation restent
+      # inconditionnelles — seule la VRAIE destruction terraform destroy plus
+      # bas est gatee par operation, et s'execute AVANT celle du Host Pool
+      # physiquement placee tout en bas de ce fichier.)
+      # ========================================================================
+
+      - name: "SH.6b. Generation tfvars"
+        working-directory: terraform-az-services/Automation_Services_Avd/SessionHost
+        run: |
+          set -euo pipefail
+          mkdir -p vars
+
+          SERVIER_ENV="${{ inputs.env }}"
+          if [ "${{ inputs.setting }}" = "PRD" ]; then
+            SERVIER_ENV="PRD"
+          fi
+
+          to_str_or_null() { [ -z "$1" ] && echo "null" || printf '"%s"' "$1"; }
+          to_num_or_null() { [ -z "$1" ] && echo "null" || echo "$1"; }
+
+          cat > "${{ env.SH_TF_VARFILE }}" << EOF
+          servier_environment = "${SERVIER_ENV}"
+          start_index         = ${{ inputs.start_index }}
+          WORKLOAD_TYPE       = $(to_str_or_null "${{ inputs.workload_type }}")
+          USER_COUNT          = $(to_num_or_null "${{ inputs.user_count }}")
+          USER_TIER           = $(to_str_or_null "${{ inputs.user_tier }}")
+          vm_count_override   = $(to_num_or_null "${{ inputs.vm_count_override }}")
+          vm_size_override    = $(to_str_or_null "${{ inputs.vm_size_override }}")
+          image_version       = $(to_str_or_null "${{ inputs.image_version }}")
+          entra_id_join             = ${{ inputs.entra_id_join }}
+          intune_enrollment_enabled = ${{ inputs.intune_enrollment_enabled }}
+          EOF
+
+          echo "----- ${{ env.SH_TF_VARFILE }} -----"
+          cat "${{ env.SH_TF_VARFILE }}"
+
+      - name: "SH.3b. Extraction coordonnees tfstate (pour terraform_remote_state)"
+        run: |
+          set -euo pipefail
+          BACKEND_FILE="terraform-az-services/Automation_Services_Avd/SessionHost/${{ steps.routing.outputs.backend }}"
+          RG=$(grep -E '^resource_group_name'  "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          SA=$(grep -E '^storage_account_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          CONTAINER=$(grep -E '^container_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+
+          echo "TF_VAR_tfstate_resource_group_name=$RG"   >> "$GITHUB_ENV"
+          echo "TF_VAR_tfstate_storage_account_name=$SA"  >> "$GITHUB_ENV"
+          echo "TF_VAR_tfstate_container_name=$CONTAINER" >> "$GITHUB_ENV"
+          echo "tfstate RG/SA/Container : $RG / $SA / $CONTAINER"
+
+      - name: "SH.6c. Break state lock si existant"
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          BACKEND_FILE="terraform-az-services/Automation_Services_Avd/SessionHost/${{ steps.routing.outputs.backend }}"
+          SA=$(grep -E '^storage_account_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          CONTAINER=$(grep -E '^container_name' "$BACKEND_FILE" | sed -E 's/.*= *"([^"]+)".*/\1/')
+          BLOB="avd-sessionhost-tfstateenv:${{ env.SH_TF_WORKSPACE }}"
+          echo "Break lock sur $SA/$CONTAINER/$BLOB..."
+          az storage blob lease break \
+            --account-name "$SA" \
+            --container-name "$CONTAINER" \
+            --blob-name "$BLOB" \
+            --auth-mode login 2>/dev/null \
+            && echo "Lock libere" || echo "Pas de lock actif"
+
+      - name: "SH.6d. Get token for Terraform modules"
+        id: get_token_tf_sh
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id:          ${{ vars.GH_APP_ID }}
+          private_key:     ${{ secrets.GH_APP_PRIVATE_KEY }}
+          installation_id: ${{ vars.GH_APP_INSTALLATION_ID }}
+          revoke: false
+
+      - name: "SH.7. Terraform Init + Workspace"
+        working-directory: terraform-az-services/Automation_Services_Avd/SessionHost
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+          GITHUB_TOKEN:        ${{ steps.get_token_tf_sh.outputs.token }}
+        run: |
+          set -euo pipefail
+          echo "machine github.com login x-access-token password ${GITHUB_TOKEN}" > ~/.netrc
+          chmod 600 ~/.netrc
+          unset TF_WORKSPACE
+          terraform init -reconfigure -backend-config="${{ steps.routing.outputs.backend }}"
+          terraform workspace new "${{ env.SH_TF_WORKSPACE }}" 2>/dev/null || \
+          terraform workspace select "${{ env.SH_TF_WORKSPACE }}"
+          rm -f ~/.netrc
+
+      - name: "SH.7b. Resolution sizing (session_host_count)"
+        id: sizing
+        working-directory: terraform-az-services/Automation_Services_Avd/SessionHost
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          set -euo pipefail
+          COUNT=$(echo 'local.session_host_count' | terraform console -var-file="${{ env.SH_TF_VARFILE }}" | grep -E '^[0-9]+$' | tail -n1)
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Session Host count (calcule) : $COUNT"
+
+      # ========================================================================
+      # SH.8b : Verification + import des Session Hosts existants
+      #
+      # RG/HP reutilises directement depuis HP.8a (steps.names) — pas besoin
+      # de re-interroger Azure comme le fait terraform-avd-sessionhost.yml
+      # seul (qui ne connait pas encore le Host Pool au moment de son propre
+      # run) : ici le Host Pool vient d'etre cree/verifie dans ce meme job.
+      # ========================================================================
+      - name: "SH.8b. Import Session Hosts existants"
+        working-directory: terraform-az-services/Automation_Services_Avd/SessionHost
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          set -euo pipefail
+          SUB="${{ inputs.subscription_id }}"
+          RG_NAME="${{ steps.names.outputs.rg }}"
+          NAME_PREFIX="AVD${{ steps.names.outputs.hp }}"
+          COUNT=${{ steps.sizing.outputs.count }}
+          START=${{ inputs.start_index }}
+          STATE_LIST=$(terraform state list)
+
+          for (( i=0; i<COUNT; i++ )); do
+            N=$((START + i))
+            VM_NAME="${NAME_PREFIX}-${N}"
+            NIC_NAME="${VM_NAME}-NIC"
+
+            VM_ADDR="module.session_host.azurerm_windows_virtual_machine.this[$i]"
+            NIC_ADDR="module.session_host.azurerm_network_interface.this[$i]"
+            AAD_ADDR="module.session_host.azurerm_virtual_machine_extension.aadlogin[$i]"
+            DSC_ADDR="module.session_host.azurerm_virtual_machine_extension.avd_registration[$i]"
+
+            VM_ID=$(az vm show -g "$RG_NAME" -n "$VM_NAME" --subscription "$SUB" --query id -o tsv 2>/dev/null || echo "")
+            if [ -n "$VM_ID" ]; then
+              if grep -qF "$VM_ADDR" <<< "$STATE_LIST"; then
+                echo "$VM_NAME : VM deja dans le state. Import ignore."
+              else
+                echo "Import VM $VM_NAME..."
+                terraform import -var-file="${{ env.SH_TF_VARFILE }}" "$VM_ADDR" "$VM_ID"
+                STATE_LIST=$(terraform state list)
+              fi
+            else
+              echo "$VM_NAME : VM absente — sera creee par Terraform."
+            fi
+
+            NIC_ID=$(az network nic show -g "$RG_NAME" -n "$NIC_NAME" --subscription "$SUB" --query id -o tsv 2>/dev/null || echo "")
+            if [ -n "$NIC_ID" ]; then
+              if grep -qF "$NIC_ADDR" <<< "$STATE_LIST"; then
+                echo "$NIC_NAME : NIC deja dans le state. Import ignore."
+              else
+                echo "Import NIC $NIC_NAME..."
+                terraform import -var-file="${{ env.SH_TF_VARFILE }}" "$NIC_ADDR" "$NIC_ID"
+                STATE_LIST=$(terraform state list)
+              fi
+            else
+              echo "$NIC_NAME : NIC absente — sera creee par Terraform."
+            fi
+
+            if [ -n "$VM_ID" ]; then
+              AAD_ID=$(az vm extension show -g "$RG_NAME" --vm-name "$VM_NAME" -n "AADLoginForWindows" --subscription "$SUB" --query id -o tsv 2>/dev/null || echo "")
+              if [ -n "$AAD_ID" ] && ! grep -qF "$AAD_ADDR" <<< "$STATE_LIST"; then
+                echo "Import extension AADLoginForWindows ($VM_NAME)..."
+                terraform import -var-file="${{ env.SH_TF_VARFILE }}" "$AAD_ADDR" "$AAD_ID" || \
+                  echo "::warning::Import AADLoginForWindows echoue pour $VM_NAME"
+                STATE_LIST=$(terraform state list)
+              fi
+
+              DSC_ID=$(az vm extension show -g "$RG_NAME" --vm-name "$VM_NAME" -n "Microsoft.PowerShell.DSC" --subscription "$SUB" --query id -o tsv 2>/dev/null || echo "")
+              if [ -n "$DSC_ID" ]; then
+                # Un update in-place du DSC AVD (ex: modulesUrl change apres un run
+                # precedent avec avd_agent_package_url vide/obsolete) fait souvent
+                # echouer le MSI de reinstallation du RD Infra Agent avec "Access is
+                # denied" (agent deja partiellement installe/service verrouille).
+                # Si le modulesUrl en place ne correspond pas a la valeur attendue,
+                # on supprime l'extension et son entree de state pour forcer une
+                # recreation propre au lieu d'un "Modifying..." risque.
+                DSC_MODULES_URL=$(az vm extension show -g "$RG_NAME" --vm-name "$VM_NAME" -n "Microsoft.PowerShell.DSC" --subscription "$SUB" --query "settings.modulesUrl" -o tsv 2>/dev/null || echo "")
+                if [ "$DSC_MODULES_URL" != "$TF_VAR_avd_agent_package_url" ]; then
+                  echo "::warning::modulesUrl obsolete/vide sur $VM_NAME ('$DSC_MODULES_URL') — suppression de l'extension DSC pour forcer une recreation propre au lieu d'un update in-place."
+                  az vm extension delete -g "$RG_NAME" --vm-name "$VM_NAME" -n "Microsoft.PowerShell.DSC" --subscription "$SUB" || true
+                  if grep -qF "$DSC_ADDR" <<< "$STATE_LIST"; then
+                    terraform state rm "$DSC_ADDR" || true
+                    STATE_LIST=$(terraform state list)
+                  fi
+                elif ! grep -qF "$DSC_ADDR" <<< "$STATE_LIST"; then
+                  echo "Import extension Microsoft.PowerShell.DSC ($VM_NAME)..."
+                  terraform import -var-file="${{ env.SH_TF_VARFILE }}" "$DSC_ADDR" "$DSC_ID" || \
+                    echo "::warning::Import Microsoft.PowerShell.DSC echoue pour $VM_NAME"
+                  STATE_LIST=$(terraform state list)
+                fi
+              fi
+            fi
+          done
+
+      - name: "SH.9. Terraform Plan"
+        if: inputs.operation != 'destroy'
+        working-directory: terraform-az-services/Automation_Services_Avd/SessionHost
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: terraform plan -var-file="${{ env.SH_TF_VARFILE }}" -out="${{ env.SH_TF_PLANFILE }}"
+
+      - name: "SH.9. Terraform Apply"
+        if: inputs.operation == 'apply'
+        working-directory: terraform-az-services/Automation_Services_Avd/SessionHost
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: terraform apply -input=false -auto-approve "${{ env.SH_TF_PLANFILE }}"
+
+      - name: "SH.9. Terraform Destroy"
+        if: inputs.operation == 'destroy'
+        working-directory: terraform-az-services/Automation_Services_Avd/SessionHost
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          terraform destroy -auto-approve \
+            -var-file="${{ env.SH_TF_VARFILE }}" \
+            -target=module.session_host
+
+      # ========================================================================
+      # HP.9. Terraform Destroy — VOLONTAIREMENT tout en bas du fichier.
+      # Doit s'executer APRES la destruction des Session Hosts ci-dessus,
+      # sinon la suppression du Resource Group ici presente cascaderait sur
+      # les VM Session Host sans jamais mettre a jour leur state Terraform
+      # (orphelins garantis). Cf. note d'architecture en tete de fichier.
+      # ========================================================================
+      - name: "HP.9. Terraform Destroy"
+        if: inputs.operation == 'destroy'
+        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          terraform destroy -auto-approve \
+            -var-file="${{ env.HP_TF_VARFILE }}" \
+            -target=azurerm_virtual_desktop_scaling_plan.sp \
+            -target=azurerm_virtual_desktop_workspace_application_group_association.ws_dag \
+            -target=azurerm_virtual_desktop_application_group.dag \
+            -target=azurerm_virtual_desktop_workspace.ws \
+            -target=azurerm_role_assignment.dvd_user \
+            -target=azurerm_role_assignment.smb_contributor \
+            -target=azurerm_role_assignment.vm_user_login \
+            -target=azuread_group.users \
+            -target=azuread_group.devices \
+            -target=azurerm_key_vault_secret.admin \
+            -target=random_password.admin \
+            -target=module.host_pool \
+            -target=module.private_endpoint \
+            -target=module.subnet \
+            -target=module.storage_account \
+            -target=azurerm_storage_share_directory.profils \
+            -target=module.fileshare \
+            -target=azapi_resource.scaling_plan_personal_schedule \
+            -target=azapi_resource.scaling_plan_personal \
+            -target=azurerm_resource_group.rg
