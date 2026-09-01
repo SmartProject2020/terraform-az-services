@@ -121,6 +121,12 @@ on:
         required: true
         type: string
 
+      authorized_users:
+        description: "Utilisateurs autorises a se connecter (UPN/email, separes par des virgules) — ajoutes au groupe EM-GA-AVD-AVD<POOL> (VM User Login + SMB + Desktop Virtualization User). Additif uniquement : ne retire jamais un membre existant."
+        required: false
+        default: ""
+        type: string
+
 permissions:
   id-token: write
   contents: read
@@ -865,6 +871,47 @@ jobs:
               fi
             fi
           fi
+
+      # ========================================================================
+      # ETAPE 9c : Ajout des utilisateurs autorises au groupe EM-GA-AVD-AVD<POOL>
+      # Purement imperatif (az cli, pas de ressource Terraform) : additif
+      # uniquement, ne retire jamais un membre existant (decision Ramzi
+      # 2026-09-01) — retrait a faire manuellement dans le portail si besoin.
+      # Prerequis SP OIDC : Group.ReadWrite.All (deja requis Task #6) +
+      # User.Read.All (Microsoft Graph) pour resoudre les UPN en objectId.
+      # ========================================================================
+      - name: "9c. Ajout utilisateurs autorises (groupe EM-GA-AVD-AVD<POOL>)"
+        if: inputs.operation == 'apply' && inputs.authorized_users != ''
+        run: |
+          set -euo pipefail
+          HP_NAME="${{ steps.names.outputs.hp }}"
+          GROUP_USERS_NAME="EM-GA-AVD-AVD${HP_NAME}"
+
+          GROUP_USERS_ID=$(az ad group show --group "$GROUP_USERS_NAME" --query id -o tsv 2>/dev/null || echo "")
+          if [ -z "$GROUP_USERS_ID" ]; then
+            echo "::warning::Groupe $GROUP_USERS_NAME introuvable — ajout des utilisateurs ignore"
+            exit 0
+          fi
+
+          IFS=',' read -ra USER_LIST <<< "${{ inputs.authorized_users }}"
+          for RAW_UPN in "${USER_LIST[@]}"; do
+            UPN=$(echo "$RAW_UPN" | xargs)
+            [ -z "$UPN" ] && continue
+
+            USER_ID=$(az ad user show --id "$UPN" --query id -o tsv 2>/dev/null || echo "")
+            if [ -z "$USER_ID" ]; then
+              echo "::warning::Utilisateur '$UPN' introuvable dans Entra ID — ignore"
+              continue
+            fi
+
+            IS_MEMBER=$(az ad group member check --group "$GROUP_USERS_ID" --member-id "$USER_ID" --query value -o tsv 2>/dev/null || echo "false")
+            if [ "$IS_MEMBER" = "true" ]; then
+              echo "$UPN deja membre de $GROUP_USERS_NAME"
+            else
+              az ad group member add --group "$GROUP_USERS_ID" --member-id "$USER_ID"
+              echo "$UPN ajoute a $GROUP_USERS_NAME"
+            fi
+          done
 
       - name: "9. Terraform Destroy"
         if: inputs.operation == 'destroy'

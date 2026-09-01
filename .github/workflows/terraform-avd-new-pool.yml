@@ -132,6 +132,12 @@ on:
         required: true
         type: string
 
+      authorized_users:
+        description: "Utilisateurs autorises a se connecter (UPN/email, separes par des virgules) — ajoutes au groupe EM-GA-AVD-AVD<POOL> (VM User Login + SMB + Desktop Virtualization User). Additif uniquement : ne retire jamais un membre existant."
+        required: false
+        default: ""
+        type: string
+
       # ------------------------------------------------------------------
       # Session Hosts — dimensionnement (TAD section 2.2) : vm_size et
       # session_host_count derives (locals.tf) de pool_type + workload_type/
@@ -198,7 +204,7 @@ permissions:
 jobs:
   terraform:
     name: "Terraform ${{ inputs.operation }} - ${{ inputs.plaque }}/${{ inputs.setting }}/${{ inputs.env }} - ${{ inputs.pool_type }}${{ inputs.pool_id }} (HostPool+SessionHost)"
-    runs-on: ubuntu-latest
+    runs-on: "Automation_linux_pool"
 
     env:
       # ---- Variables Terraform partagees (memes valeurs pour les deux root modules) ----
@@ -392,6 +398,27 @@ jobs:
           terraform workspace select "${{ env.HP_TF_WORKSPACE }}"
           rm -f ~/.netrc
 
+      # ========================================================================
+      # TEMPORAIRE — a retirer des que la connectivite reseau runner <-> Private
+      # Endpoint du Storage Account FSLogix est corrigee (cf. session du
+      # 2026-08-31 : "dial tcp <IP privee>:443: connect: connection refused"
+      # sur azurerm_storage_share_directory.profils lors du refresh Terraform).
+      # La ressource est commentee dans HostPool/main.tf (le dossier "profiles"
+      # existe deja dans Azure, cree lors d'un run precedent) ; ce step retire
+      # aussi l'entree du state pour que le plan/apply ne tente plus de la
+      # rafraichir (et echoue donc plus sur l'appel data-plane bloque).
+      # ========================================================================
+      - name: "TEMP. Nettoyage state - repertoire profils (contournement PE)"
+        working-directory: terraform-az-services/Automation_Services_Avd/HostPool
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          terraform state rm azurerm_storage_share_directory.profils 2>/dev/null || \
+            echo "Repertoire profils absent du state, rien a faire."
+
       - name: "HP.8a. Calcul noms ressources (RG + Host Pool + Storage)"
         id: names
         run: |
@@ -448,11 +475,14 @@ jobs:
           SETTING="${{ inputs.setting }}"
           SUBNET_NAME=$(echo "${PLAQUE}-${SETTING}-${{ inputs.pool_type }}${{ inputs.pool_id }}-SNET01" | tr '[:lower:]' '[:upper:]')
           NETWORK_KEY="${SETTING}-${{ inputs.network_zone }}"
+          # KV_NAME/KV_RG : Key Vault AVD partage, co-localise avec le VNET/RT
+          # de cette combinaison SETTING+NETWORK_ZONE (confirme sur le tenant
+          # Servier reel le 2026-08-24 — meme table que locals.tf network_lookup).
           case "$NETWORK_KEY" in
-            "PRD-standard") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET01" ;;
-            "PRD-critical") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET02" ;;
-            "NPR-standard") VNET_RG="EM50-NPR-AVDAZ-TST-RG01"; VNET_NAME="EM50-NPR-AVDAZ-VNET01" ;;
-            *)               VNET_RG=""; VNET_NAME="" ;;
+            "PRD-standard") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET01"; KV_NAME="EM50-PRD-AVDAZ-KV01"; KV_RG="EM50-PRD-AVDAZ-PRD-RG01" ;;
+            "PRD-critical") VNET_RG="EM50-PRD-AVDAZ-PRD-RG01"; VNET_NAME="EM50-PRD-AVDAZ-VNET02"; KV_NAME="EM50-PRD-AVDAZ-KV01"; KV_RG="EM50-PRD-AVDAZ-PRD-RG01" ;;
+            "NPR-standard") VNET_RG="EM50-NPR-AVDAZ-TST-RG01"; VNET_NAME="EM50-NPR-AVDAZ-VNET01"; KV_NAME="EM50-TST-AVDAZ-KV01"; KV_RG="EM50-NPR-AVDAZ-TST-RG01" ;;
+            *)               VNET_RG=""; VNET_NAME=""; KV_NAME=""; KV_RG="" ;;
           esac
           SNET_ADDR="module.subnet.azurerm_subnet.this"
           if [ -n "${VNET_RG:-}" ]; then
@@ -556,11 +586,8 @@ jobs:
           fi
 
           # ── Mot de passe admin local (Key Vault) ──────────────────────────
-          # KV_NAME/KV_RG suivent le meme defaut que locals.tf (kv_name/
-          # kv_resource_group_name, coalesce sur var.KV_NAME/KV_RESOURCE_GROUP_NAME
-          # desormais toujours vides depuis le retrait des inputs correspondants).
-          KV_NAME="${PLAQUE}-${SETTING}-AVD00-KV01"
-          KV_RG="${PLAQUE}-${SETTING}-AVD00-${SETTING}-RG01"
+          # KV_NAME/KV_RG deja calcules plus haut (case "$NETWORK_KEY", meme
+          # table que locals.tf network_lookup).
           SECRET_NAME="avdlocaladmin-${HP_NAME}"
           RAND_ADDR="random_password.admin"
           SECRET_ADDR="azurerm_key_vault_secret.admin"
@@ -838,6 +865,26 @@ jobs:
             fi
           fi
 
+      # Petit step dedie (pas fusionne dans HP.8b, deja tres volumineux) : evite
+      # de faire grossir le bloc run: de HP.8b au-dela de la limite GitHub
+      # Actions "Exceeded max expression length 21000" (rencontree le 2026-08-24
+      # en y ajoutant seulement quelques lignes).
+      - name: "HP.8c. Verification existence RG (pour Session Host)"
+        id: rg_check
+        env:
+          ARM_USE_OIDC:        "true"
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
+        run: |
+          set -euo pipefail
+          RG_EXISTS=$(az group show --name "${{ steps.names.outputs.rg }}" --subscription "${{ inputs.subscription_id }}" --query id -o tsv 2>/dev/null || echo "")
+          if [ -n "$RG_EXISTS" ]; then
+            echo "rg_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "rg_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: "HP.9. Terraform Plan"
         if: inputs.operation != 'destroy'
         working-directory: terraform-az-services/Automation_Services_Avd/HostPool
@@ -939,6 +986,47 @@ jobs:
           fi
 
       # ========================================================================
+      # HP.9c : Ajout des utilisateurs autorises au groupe EM-GA-AVD-AVD<POOL>
+      # Purement imperatif (az cli, pas de ressource Terraform) : additif
+      # uniquement, ne retire jamais un membre existant (decision Ramzi
+      # 2026-09-01) — retrait a faire manuellement dans le portail si besoin.
+      # Prerequis SP OIDC : Group.ReadWrite.All (deja requis Task #6) +
+      # User.Read.All (Microsoft Graph) pour resoudre les UPN en objectId.
+      # ========================================================================
+      - name: "HP.9c. Ajout utilisateurs autorises (groupe EM-GA-AVD-AVD<POOL>)"
+        if: inputs.operation == 'apply' && inputs.authorized_users != ''
+        run: |
+          set -euo pipefail
+          HP_NAME="${{ steps.names.outputs.hp }}"
+          GROUP_USERS_NAME="EM-GA-AVD-AVD${HP_NAME}"
+
+          GROUP_USERS_ID=$(az ad group show --group "$GROUP_USERS_NAME" --query id -o tsv 2>/dev/null || echo "")
+          if [ -z "$GROUP_USERS_ID" ]; then
+            echo "::warning::Groupe $GROUP_USERS_NAME introuvable — ajout des utilisateurs ignore"
+            exit 0
+          fi
+
+          IFS=',' read -ra USER_LIST <<< "${{ inputs.authorized_users }}"
+          for RAW_UPN in "${USER_LIST[@]}"; do
+            UPN=$(echo "$RAW_UPN" | xargs)
+            [ -z "$UPN" ] && continue
+
+            USER_ID=$(az ad user show --id "$UPN" --query id -o tsv 2>/dev/null || echo "")
+            if [ -z "$USER_ID" ]; then
+              echo "::warning::Utilisateur '$UPN' introuvable dans Entra ID — ignore"
+              continue
+            fi
+
+            IS_MEMBER=$(az ad group member check --group "$GROUP_USERS_ID" --member-id "$USER_ID" --query value -o tsv 2>/dev/null || echo "false")
+            if [ "$IS_MEMBER" = "true" ]; then
+              echo "$UPN deja membre de $GROUP_USERS_NAME"
+            else
+              az ad group member add --group "$GROUP_USERS_ID" --member-id "$USER_ID"
+              echo "$UPN ajoute a $GROUP_USERS_NAME"
+            fi
+          done
+
+      # ========================================================================
       # ========================= SESSION HOST =================================
       # (place APRES le Host Pool pour plan/apply : le remote_state du Host
       # Pool doit deja avoir ete applique pour que ces steps trouvent les
@@ -962,9 +1050,22 @@ jobs:
           to_str_or_null() { [ -z "$1" ] && echo "null" || printf '"%s"' "$1"; }
           to_num_or_null() { [ -z "$1" ] && echo "null" || echo "$1"; }
 
+          # resource_group_exists : calcule par le workflow, pas un input
+          # ServiceNow. False uniquement en operation=plan sur un pool dont le
+          # Host Pool n'a pas encore ete applique (rg_exists calcule dans
+          # HP.8c, id: rg_check) — evite l'echec du data source de lecture des
+          # tags du RG dans le module enfant SessionHost. Toujours true a
+          # l'apply (le Host Pool cree le RG avant que ces steps SessionHost
+          # ne tournent).
+          RESOURCE_GROUP_EXISTS="true"
+          if [ "${{ inputs.operation }}" = "plan" ] && [ "${{ steps.rg_check.outputs.rg_exists }}" != "true" ]; then
+            RESOURCE_GROUP_EXISTS="false"
+          fi
+
           cat > "${{ env.SH_TF_VARFILE }}" << EOF
-          servier_environment = "${SERVIER_ENV}"
-          start_index         = ${{ inputs.start_index }}
+          servier_environment   = "${SERVIER_ENV}"
+          start_index           = ${{ inputs.start_index }}
+          resource_group_exists = ${RESOURCE_GROUP_EXISTS}
           WORKLOAD_TYPE       = $(to_str_or_null "${{ inputs.workload_type }}")
           USER_COUNT          = $(to_num_or_null "${{ inputs.user_count }}")
           USER_TIER           = $(to_str_or_null "${{ inputs.user_tier }}")
@@ -1176,9 +1277,20 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
           ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
         run: |
-          terraform destroy -auto-approve \
-            -var-file="${{ env.SH_TF_VARFILE }}" \
-            -target=module.session_host
+          # Si module.session_host est vide (rien a detruire — cas d'un pool
+          # dont le Host Pool a echoue avant meme d'atteindre le secret KV du
+          # mot de passe admin), ne pas appeler terraform destroy : le
+          # data source data.azurerm_key_vault_secret.admin (main.tf) est
+          # evalue meme pour un -target ciblant module.session_host, et
+          # plante ("... does not exist") si ce secret n'a jamais ete cree —
+          # alors qu'il n'y a de toute facon aucune VM/NIC a detruire.
+          if terraform state list 2>/dev/null | grep -q '^module\.session_host\.'; then
+            terraform destroy -auto-approve \
+              -var-file="${{ env.SH_TF_VARFILE }}" \
+              -target=module.session_host
+          else
+            echo "module.session_host vide (aucune VM/NIC en state) — rien a detruire, terraform destroy ignore."
+          fi
 
       # ========================================================================
       # HP.9. Terraform Destroy — VOLONTAIREMENT tout en bas du fichier.
@@ -1196,6 +1308,10 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
           ARM_CLIENT_ID:       ${{ secrets[steps.routing.outputs.secret] }}
         run: |
+          # -target=azurerm_storage_share_directory.profils retire TEMPORAIREMENT
+          # (voir step "TEMP. Nettoyage state" plus haut) — la ressource est
+          # commentee dans HostPool/main.tf, -target planterait sinon car
+          # l'adresse n'existe plus dans la configuration.
           terraform destroy -auto-approve \
             -var-file="${{ env.HP_TF_VARFILE }}" \
             -target=azurerm_virtual_desktop_scaling_plan.sp \
@@ -1213,7 +1329,6 @@ jobs:
             -target=module.private_endpoint \
             -target=module.subnet \
             -target=module.storage_account \
-            -target=azurerm_storage_share_directory.profils \
             -target=module.fileshare \
             -target=azapi_resource.scaling_plan_personal_schedule \
             -target=azapi_resource.scaling_plan_personal \
